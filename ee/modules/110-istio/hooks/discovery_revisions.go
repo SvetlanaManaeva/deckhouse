@@ -38,20 +38,19 @@ func revisionsDiscovery(input *go_hook.HookInput, dc dependency.Container) error
 
 	var globalVersion string
 
-	// globalVersion is set in CM — use it
-	if input.ConfigValues.Exists("istio.globalVersion") {
+	switch {
+	case input.ConfigValues.Exists("istio.globalVersion"):
+		// globalVersion is set in CM — use it
 		globalVersion = input.ConfigValues.Get("istio.globalVersion").String()
 
 		if !internal.Contains(supportedVersions, globalVersion) {
 			unsupportedVersions = append(unsupportedVersions, globalVersion)
 		}
-
+	case input.Values.Exists("istio.internal.globalVersion"):
 		// globalVersion was previously discovered — use it
-	} else if input.Values.Exists("istio.internal.globalVersion") {
 		globalVersion = input.Values.Get("istio.internal.globalVersion").String()
-
+	default:
 		// maybe there is a global istiod Service with annotation?
-	} else {
 		k8sClient, err := dc.GetK8sClient()
 		if err != nil {
 			return err
