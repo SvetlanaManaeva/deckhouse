@@ -120,22 +120,8 @@ func (h *Hook) Filter(obj *unstructured.Unstructured) (go_hook.FilterResult, err
 		return string(secret.Data[h.Secret.RawPasswordField]), nil
 	}
 
-	// Default is to store password as basic auth plain format.
-	field := h.Secret.BasicAuthPlainField
-	if field == "" {
-		field = defaultBasicAuthPlainField
-	}
-
-	basicAuth := string(secret.Data[field])
-	if !strings.Contains(basicAuth, "{PLAIN}") {
-		return nil, fmt.Errorf("field '%s' in Secret/%s is not a basic auth plain password", field, secret.GetName())
-	}
-
-	parts := strings.SplitN(basicAuth, "{PLAIN}", 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("field '%s' in Secret/%s is not a basic auth plain password", field, secret.GetName())
-	}
-	return strings.TrimSpace(parts[1]), nil
+	// Return field with basic auth.
+	return string(secret.Data[h.SecretField()]), nil
 }
 
 // Handle restores password from the configuration or from the Secret and
@@ -168,13 +154,7 @@ func (h *Hook) Handle(input *go_hook.HookInput) error {
 		return nil
 	}
 
-	// Return if auth key is already in values.
-	_, ok = input.Values.GetOk(passwordInternalKey)
-	if ok {
-		return nil
-	}
-
-	// No password found, generate new one.
+	// No config value, no Secret, generate new password.
 	newPassword := ""
 	if h.PasswordGeneratorFunc != nil {
 		newPassword = h.PasswordGeneratorFunc(input)
@@ -214,6 +194,25 @@ func (h *Hook) PasswordInternalKey() string {
 		return key
 	}
 	return fmt.Sprintf(passwordInternalKeyTmpl, h.Values.ModuleKey)
+}
+
+func (h *Hook) SecretField() string {
+	field := h.Secret.BasicAuthPlainField
+	if field == "" {
+		field = defaultBasicAuthPlainField
+	}
+	return field
+}
+
+// extractPasswordFromBasicAuth extracts password from the plain basic auth string:
+// username:{PLAIN}password
+func (h *Hook) extractPasswordFromBasicAuth(basicAuth string) (string, error) {
+	parts := strings.SplitN(basicAuth, "{PLAIN}", 2)
+	if len(parts) != 2 {
+		return "", fmt.Errorf("field '%s' in Secret/%s is not a basic auth plain password", h.SecretField(), h.Secret.Name)
+	}
+
+	return strings.TrimSpace(parts[1]), nil
 }
 
 func DefaultGenerator() string {

@@ -34,6 +34,9 @@ const (
 	clientRoutesInternalValuesPath = "openvpn.internal.pushToClientRoutes"
 )
 
+// setPushToClientRoutes create routes list for client
+// from module config values and global discovery.
+// Routes in list are unique.
 func setPushToClientRoutes(input *go_hook.HookInput) error {
 	var routes = set.New()
 
