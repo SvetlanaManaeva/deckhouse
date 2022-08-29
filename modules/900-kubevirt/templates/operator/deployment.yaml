@@ -38,8 +38,6 @@ spec:
         prometheus.kubevirt.io: "true"
       name: virt-operator
     spec:
-      imagePullSecrets:
-      - name: deckhouse-registry
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -63,7 +61,7 @@ spec:
         env:
         {{- include "kubevirt-images" . | nindent 8 }}
         - name: KUBEVIRT_VERSION
-          value: {{ include "kubevirt-images" . | sha256sum }}
+          value: {{ include "kubevirt-images" . | sha256sum | trunc 7 }}
         - name: WATCH_NAMESPACE
           value: d8-kubevirt
         image: "{{ $.Values.global.modulesImages.registry }}:{{ $.Values.global.modulesImages.tags.kubevirt.virtOperator }}"

@@ -3,9 +3,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: kubevirt.io:operator
-  labels:
-    operator.kubevirt.io: ""
-    rbac.authorization.k8s.io/aggregate-to-admin: "true"
   {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
 rules:
   - apiGroups:
@@ -25,19 +22,15 @@ rules:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  labels:
-    kubevirt.io: ""
   name: kubevirt-operator
   namespace: d8-kubevirt
   {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
 imagePullSecrets:
-- name: "deckhouse-registry"
+- name: deckhouse-registry
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  labels:
-    kubevirt.io: ""
   name: kubevirt-operator
   namespace: d8-kubevirt
   {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
@@ -85,8 +78,6 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  labels:
-    kubevirt.io: ""
   name: kubevirt-operator-rolebinding
   namespace: d8-kubevirt
   {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
@@ -102,8 +93,6 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  labels:
-    kubevirt.io: ""
   name: kubevirt-operator
   {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
 rules:
@@ -1036,8 +1025,6 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  labels:
-    kubevirt.io: ""
   name: kubevirt-operator
   {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
 roleRef:
