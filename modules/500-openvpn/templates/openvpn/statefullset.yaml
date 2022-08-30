@@ -10,6 +10,10 @@ memory: 50Mi
 cpu: 50m
 memory: 50Mi
 {{- end }}
+{{- define "openvpn_ccd_sync_udp_resources" }}
+cpu: 10m
+memory: 10Mi
+{{- end }}
 
 {{- if (.Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
 ---
@@ -124,7 +128,7 @@ spec:
             readOnly: true
         resources:
           requests:
-{{- include "helm_lib_module_ephemeral_storage_logs_with_extra" 10 | indent 12 }}
+            {{- include "helm_lib_module_ephemeral_storage_logs_with_extra" 10 | indent 12 }}
   {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
             {{- include "openvpn_tcp_resources" . | nindent 12 }}
   {{- end }}
@@ -159,7 +163,7 @@ spec:
             readOnly: true
         resources:
           requests:
-{{- include "helm_lib_module_ephemeral_storage_logs_with_extra" 10 | indent 12 }}
+            {{- include "helm_lib_module_ephemeral_storage_logs_with_extra" 10 | indent 12 }}
   {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
             {{- include "openvpn_udp_resources" . | nindent 12 }}
   {{- end }}
@@ -168,7 +172,7 @@ spec:
       - name: sync-ccd-udp
         {{- include "helm_lib_module_container_security_context_read_only_root_filesystem_capabilities_drop_all" . | nindent 8 }}
         image: {{ include "helm_lib_module_image" (list . "openvpn") }}
-        command: [ '/sync_ccd_udp.sh', 'udp' ]
+        command: [ '/sync_ccd_udp.sh' ]
         volumeMounts:
           - name: ccd
             mountPath: /etc/openvpn/ccd
@@ -180,11 +184,10 @@ spec:
             readOnly: true
         resources:
           requests:
-{{- include "helm_lib_module_ephemeral_storage_logs_with_extra" 10 | indent 12 }}
+            {{- include "helm_lib_module_ephemeral_storage_logs_with_extra" 10 | indent 12 }}
   {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
-            {{- include "openvpn_udp_resources" . | nindent 12 }}
+            {{- include "openvpn_ccd_sync_udp_resources" . | nindent 12 }}
   {{- end }}
-{{- end }}
 # ovpn-admin
       - name: ovpn-admin
         {{- include "helm_lib_module_container_security_context_read_only_root_filesystem_capabilities_drop_all" . | nindent 8 }}
