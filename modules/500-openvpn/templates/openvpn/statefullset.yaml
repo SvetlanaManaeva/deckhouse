@@ -167,12 +167,11 @@ spec:
   {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
             {{- include "openvpn_udp_resources" . | nindent 12 }}
   {{- end }}
-{{- end }}
 # sync-ccd-udp
       - name: sync-ccd-udp
         {{- include "helm_lib_module_container_security_context_read_only_root_filesystem_capabilities_drop_all" . | nindent 8 }}
         image: {{ include "helm_lib_module_image" (list . "openvpn") }}
-        command: [ '/sync_ccd_udp.sh' ]
+        command: [ '/sync_ccd_udp.sh', "{{ .Values.openvpn.tunnelNetwork }}", "{{ .Values.openvpn.udpTunnelNetwork }}" ]
         volumeMounts:
           - name: ccd
             mountPath: /etc/openvpn/ccd
@@ -188,6 +187,7 @@ spec:
   {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
             {{- include "openvpn_ccd_sync_udp_resources" . | nindent 12 }}
   {{- end }}
+{{- end }}
 # ovpn-admin
       - name: ovpn-admin
         {{- include "helm_lib_module_container_security_context_read_only_root_filesystem_capabilities_drop_all" . | nindent 8 }}
