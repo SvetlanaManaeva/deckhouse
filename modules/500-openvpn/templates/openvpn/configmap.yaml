@@ -119,11 +119,14 @@ data:
   sync_ccd_udp.sh: |-
     #!/bin/sh
 
-    mkdir -p /etc/openvpn/ccd-udp
+    tcp_network="$(echo $1 | rev | sed 's/\./ /' | rev | awk '{print $1}')"
+    udp_network="$(echo $2 | rev | sed 's/\./ /' | rev | awk '{print $1}')"
 
     while true; do
       if [ -d /etc/openvpn/ccd ]; then
-        cp /etc/openvpn/ccd/* /etc/openvpn/ccd-udp
+        for f in $(ls -1 /etc/openvpn/ccd); do
+          cat "/etc/openvpn/ccd/${f}" | sed "s/$tcp_network/$udp_network/g" > "/etc/openvpn/ccd-udp/${f}"
+        done
       fi
       sleep 10
     done
