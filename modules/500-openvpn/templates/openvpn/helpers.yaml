@@ -110,10 +110,19 @@
   {{- include "convert_bitmask_to_dotted_netmask" (list . $netmask) -}}
 {{- end -}}
 
+
 {{- define "get_network_with_bitmask" }}
   {{- $network := index . 1 -}}
   {{- $netmask := index ( splitList "/" ($network) ) 1 -}}
   {{- $address := include "get_network_address" (list . $network) }}
   {{- $mask := include "convert_dotted_netmask_to_bitmask" (list . $netmask) -}}
   {{- $address }}/{{ $mask }}
+{{- end -}}
+
+
+{{- define "push_route_format" }}
+  {{- $route := index . 1 -}}
+  {{- $address := index ( splitList "/" ($route) ) 0 -}}
+  {{- $mask := index ( splitList "/" ($route) ) 1 -}}
+  {{- $address }} {{ include "convert_bitmask_to_dotted_netmask" (list . $mask) -}}
 {{- end -}}

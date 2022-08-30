@@ -34,7 +34,7 @@ data:
     push "route-metric 9999"
     {{- if hasKey .Values.openvpn "pushToClientRoutes" }}
     {{- range $route := .Values.openvpn.pushToClientRoutes }}
-    push "route {{ $route | replace "/" " " }}"
+    push "route {{ include "push_route_format" (list . $route) }}"
     {{- end }}
     {{- else }}
     {{- end }}
@@ -72,7 +72,7 @@ data:
     push "route-metric 9999"
     {{- if hasKey .Values.openvpn "pushToClientRoutes" }}
     {{- range $route := .Values.openvpn.pushToClientRoutes }}
-    push "route {{ $route | replace "/" " " }}"
+    push "route {{ include "push_route_format" (list . $route) }}"
     {{- end }}
     {{- else }}
     {{- end }}
