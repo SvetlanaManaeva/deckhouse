@@ -83,7 +83,7 @@
   {{- $_ := set $netmasks "0.0.0.0" "0" -}}
 
 
-  {{- if lt (len $netmask) 3 -}}
+  {{- if gt (len $netmask) 3 -}}
     {{- get $netmasks $netmask -}}
   {{- else -}}
     {{- $netmask -}}
