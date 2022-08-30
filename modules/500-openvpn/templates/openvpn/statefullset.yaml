@@ -118,7 +118,7 @@ spec:
             mountPath: /etc/openvpn/openvpn-tcp.conf
             subPath: openvpn-tcp.conf
             readOnly: true
-          - name: entrypoint
+          - name: scripts
             mountPath: /entrypoint.sh
             subPath: entrypoint.sh
             readOnly: true
@@ -148,14 +148,35 @@ spec:
           - name: certs
             mountPath: /etc/openvpn/certs
           - name: ccd
-            mountPath: /etc/openvpn/ccd
+            mountPath: /etc/openvpn/ccd-udp
           - name: config
             mountPath: /etc/openvpn/openvpn-udp.conf
             subPath: openvpn-udp.conf
             readOnly: true
-          - name: entrypoint
+          - name: scripts
             mountPath: /entrypoint.sh
             subPath: entrypoint.sh
+            readOnly: true
+        resources:
+          requests:
+{{- include "helm_lib_module_ephemeral_storage_logs_with_extra" 10 | indent 12 }}
+  {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
+            {{- include "openvpn_udp_resources" . | nindent 12 }}
+  {{- end }}
+{{- end }}
+# sync-ccd-udp
+      - name: sync-ccd-udp
+        {{- include "helm_lib_module_container_security_context_read_only_root_filesystem_capabilities_drop_all" . | nindent 8 }}
+        image: {{ include "helm_lib_module_image" (list . "openvpn") }}
+        command: [ '/sync_ccd_udp.sh', 'udp' ]
+        volumeMounts:
+          - name: ccd
+            mountPath: /etc/openvpn/ccd
+          - name: ccd-udp
+            mountPath: /etc/openvpn/ccd-udp
+          - name: scripts
+            mountPath: /sync_ccd_udp.sh
+            subPath: sync_ccd_udp.sh
             readOnly: true
         resources:
           requests:
@@ -268,7 +289,7 @@ spec:
         configMap:
           name: openvpn
           defaultMode: 0644
-      - name: entrypoint
+      - name: scripts
         configMap:
           name: openvpn
           defaultMode: 0755
@@ -281,6 +302,10 @@ spec:
           medium: Memory
           sizeLimit: 128Mi
       - name: ccd
+        emptyDir:
+          medium: Memory
+          sizeLimit: 128Mi
+      - name: ccd-udp
         emptyDir:
           medium: Memory
           sizeLimit: 128Mi

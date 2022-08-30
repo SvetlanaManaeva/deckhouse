@@ -54,7 +54,7 @@ data:
     dh /etc/openvpn/certs/pki/dh.pem
     crl-verify /etc/openvpn/certs/pki/crl.pem
     tls-auth /etc/openvpn/certs/pki/ta.key
-    client-config-dir /etc/openvpn/ccd
+    client-config-dir /etc/openvpn/ccd-udp
     key-direction 0
     cipher AES-128-CBC
     management 127.0.0.1 9090
@@ -116,3 +116,14 @@ data:
 
     proto="$1"
     openvpn --config /etc/openvpn/openvpn-${proto}.conf
+  sync_ccd_udp.sh: |-
+    #!/bin/sh
+
+    mkdir -p /etc/openvpn/ccd-udp
+
+    while true; do
+      if [ -d /etc/openvpn/ccd ]; then
+        cp -r /etc/openvpn/ccd /etc/openvpn/ccd-udp
+      fi
+      sleep 10
+    done
