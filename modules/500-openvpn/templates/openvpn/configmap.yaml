@@ -1,7 +1,5 @@
-{{ $tcpDefaultTunnelNetwork := "172.25.175.0/255.255.255.0" }}
-{{ $udpDefaultTunnelNetwork := "172.25.176.0/255.255.255.0" }}
-{{ $tcpTunnelNetworkAddress := index (splitList "/" (.Values.openvpn.tunnelNetwork | default $tcpDefaultTunnelNetwork)) 0 }}
-{{ $tcpTunnelNetworkNetmask := index (splitList "/" (.Values.openvpn.tunnelNetwork | default $tcpDefaultTunnelNetwork)) 1 }}
+{{ $tcpTunnelNetworkAddress := index (splitList "/" (.Values.openvpn.tunnelNetwork | default (include "convert_netmask_if_required" (list . "7")) )) 0 }}
+{{ $tcpTunnelNetworkNetmask := index (splitList "/" (.Values.openvpn.tunnelNetwork | default .Values.openvpn.internal.defaultTunnelNetworkUDP)) 1 }}
 {{ $udpTunnelNetworkAddress := index (splitList "/" (.Values.openvpn.udpTunnelNetwork | default $udpDefaultTunnelNetwork)) 0 }}
 {{ $udpTunnelNetworkNetmask := index (splitList "/" (.Values.openvpn.udpTunnelNetwork | default $udpDefaultTunnelNetwork)) 1 }}
 ---
@@ -13,7 +11,7 @@ metadata:
   {{- include "helm_lib_module_labels" (list . (dict "app" .Chart.Name)) | nindent 2 }}
 data:
   openvpn-tcp.conf: |-
-    server {{ $tcpTunnelNetworkAddress }} {{ $tcpTunnelNetworkNetmask }}
+    server {{ include "get_network_address" (list . .Values.openvpn.tunnelNetwork) }} {{ include "get_dotted_network_mask" (list . .Values.openvpn.tunnelNetwork) }}
     verb 3
     tls-server
     ca /etc/openvpn/certs/pki/ca.crt
@@ -51,7 +49,7 @@ data:
       {{- end }}
     {{- end }}
   openvpn-udp.conf: |-
-    server {{ $udpTunnelNetworkAddress }} {{ $udpTunnelNetworkNetmask }}
+    server {{ include "get_network_address" (list . .Values.openvpn.udpTunnelNetwork) }} {{ include "get_dotted_network_mask" (list . .Values.openvpn.udpTunnelNetwork) }}
     verb 3
     tls-server
     ca /etc/openvpn/certs/pki/ca.crt
@@ -92,8 +90,8 @@ data:
   entrypoint.sh: |-
     #!/bin/sh
 
-    iptables -t nat -A POSTROUTING -s {{ $tcpTunnelNetworkAddress }}/{{ $tcpTunnelNetworkNetmask }} ! -d {{ $tcpTunnelNetworkAddress }}/{{ $tcpTunnelNetworkNetmask }} -j MASQUERADE
-    iptables -t nat -A POSTROUTING -s {{ $udpTunnelNetworkAddress }}/{{ $udpTunnelNetworkNetmask }} ! -d {{ $udpTunnelNetworkAddress }}/{{ $udpTunnelNetworkNetmask }} -j MASQUERADE
+    iptables -t nat -A POSTROUTING -s {{ include "get_network_with_bitmask" (list . .Values.openvpn.tunnelNetwork) }} ! -d {{ include "get_network_with_bitmask" (list . .Values.openvpn.tunnelNetwork) }} -j MASQUERADE
+    iptables -t nat -A POSTROUTING -s {{ include "get_network_with_bitmask" (list . .Values.openvpn.udpTunnelNetwork) }} ! -d {{ include "get_network_with_bitmask" (list . .Values.openvpn.udpTunnelNetwork) }} -j MASQUERADE
 
     mkdir -p /dev/net
     if [ ! -c /dev/net/tun ]; then
