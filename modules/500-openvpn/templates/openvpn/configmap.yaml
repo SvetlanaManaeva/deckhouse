@@ -123,7 +123,7 @@ data:
 
     while true; do
       if [ -d /etc/openvpn/ccd ]; then
-        cp -r /etc/openvpn/ccd /etc/openvpn/ccd-udp
+        cp /etc/openvpn/ccd/* /etc/openvpn/ccd-udp
       fi
       sleep 10
     done
