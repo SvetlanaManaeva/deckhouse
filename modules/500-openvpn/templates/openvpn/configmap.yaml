@@ -44,6 +44,7 @@ data:
     push "dhcp-option DOMAIN {{ $searchDomain }}"
       {{- end }}
     {{- end }}
+ {{- if .Values.openvpn.udpEnabled }}
   openvpn-udp.conf: |-
     server {{ include "get_network_address" (list . .Values.openvpn.udpTunnelNetwork) }} {{ include "get_dotted_network_mask" (list . .Values.openvpn.udpTunnelNetwork) }}
     verb 3
@@ -82,12 +83,30 @@ data:
     push "dhcp-option DOMAIN {{ $searchDomain }}"
       {{- end }}
     {{- end }}
+  sync_ccd_udp.sh: |-
+    #!/bin/sh
 
+    tcp_network="$(echo $1 | rev | sed 's/\./ /' | rev | awk '{print $1}')"
+    udp_network="$(echo $2 | rev | sed 's/\./ /' | rev | awk '{print $1}')"
+
+    while true; do
+      if [ -d /etc/openvpn/ccd ]; then
+        for f in $(ls -1 /etc/openvpn/ccd); do
+          cat "/etc/openvpn/ccd/${f}" | sed "s/$tcp_network/$udp_network/g" > "/etc/openvpn/ccd-udp/${f}"
+        done
+      fi
+      sleep 10
+    done
+{{- end }}
   entrypoint.sh: |-
     #!/bin/sh
 
+    {{- if .Values.openvpn.tcpEnabled }}
     iptables -t nat -A POSTROUTING -s {{ include "get_network_with_bitmask" (list . .Values.openvpn.tunnelNetwork) }} ! -d {{ include "get_network_with_bitmask" (list . .Values.openvpn.tunnelNetwork) }} -j MASQUERADE
+    {{- end }}
+    {{- if .Values.openvpn.udpEnabled }}
     iptables -t nat -A POSTROUTING -s {{ include "get_network_with_bitmask" (list . .Values.openvpn.udpTunnelNetwork) }} ! -d {{ include "get_network_with_bitmask" (list . .Values.openvpn.udpTunnelNetwork) }} -j MASQUERADE
+    {{- end }}
 
     mkdir -p /dev/net
     if [ ! -c /dev/net/tun ]; then
@@ -116,17 +135,3 @@ data:
 
     proto="$1"
     openvpn --config /etc/openvpn/openvpn-${proto}.conf
-  sync_ccd_udp.sh: |-
-    #!/bin/sh
-
-    tcp_network="$(echo $1 | rev | sed 's/\./ /' | rev | awk '{print $1}')"
-    udp_network="$(echo $2 | rev | sed 's/\./ /' | rev | awk '{print $1}')"
-
-    while true; do
-      if [ -d /etc/openvpn/ccd ]; then
-        for f in $(ls -1 /etc/openvpn/ccd); do
-          cat "/etc/openvpn/ccd/${f}" | sed "s/$tcp_network/$udp_network/g" > "/etc/openvpn/ccd-udp/${f}"
-        done
-      fi
-      sleep 10
-    done
