@@ -39,6 +39,12 @@ spec:
       maxAllowed:
         cpu: 350m
         memory: 300Mi
+    - containerName: sync-ccd-udp
+      minAllowed:
+        {{- include "openvpn_ccd_sync_udp_resources" . | nindent 8 }}
+      maxAllowed:
+        cpu: 50m
+        memory: 50Mi
   {{- end }}
   {{- if .Values.openvpn.tcpEnabled }}
     - containerName: openvpn-tcp
