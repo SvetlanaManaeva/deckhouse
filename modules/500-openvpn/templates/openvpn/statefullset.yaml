@@ -151,7 +151,7 @@ spec:
         volumeMounts:
           - name: certs
             mountPath: /etc/openvpn/certs
-          - name: ccd
+          - name: ccd-udp
             mountPath: /etc/openvpn/ccd-udp
           - name: config
             mountPath: /etc/openvpn/openvpn-udp.conf

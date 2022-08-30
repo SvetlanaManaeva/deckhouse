@@ -35,7 +35,6 @@
   {{- $_ := set $netmasks "1" "128.0.0.0" -}}
   {{- $_ := set $netmasks "0" "0.0.0.0" -}}
 
-
   {{- if lt (len $netmask) 3 -}}
     {{- get $netmasks $netmask -}}
   {{- else -}}
@@ -81,7 +80,6 @@
   {{- $_ := set $netmasks "192.0.0.0" "2" -}}
   {{- $_ := set $netmasks "128.0.0.0" "1" -}}
   {{- $_ := set $netmasks "0.0.0.0" "0" -}}
-
 
   {{- if gt (len $netmask) 3 -}}
     {{- get $netmasks $netmask -}}
