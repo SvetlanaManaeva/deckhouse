@@ -23,6 +23,7 @@ metadata:
   {{- include "helm_lib_module_labels" (list . (dict "app" "deckhouse-config-webhook")) | nindent 2 }}
 spec:
   {{- include "helm_lib_deployment_on_master_strategy_and_replicas_for_ha" . | nindent 2 }}
+  revisionHistoryLimit: 2
   selector:
     matchLabels:
       heritage: deckhouse
@@ -49,7 +50,8 @@ spec:
       containers:
       - name: deckhouse-config-validator
         {{- include "helm_lib_module_container_security_context_read_only_root_filesystem" . | nindent 8 }}
-        image: "{{ $.Values.global.modulesImages.registry }}:{{ $.Values.global.modulesImages.tags.deckhouseConfig.deckhouseConfigWebhook }}"
+        image: {{ include "helm_lib_module_image" (list . "deckhouseConfigWebhook") }}
+        imagePullPolicy: IfNotPresent
         args:
           - -tls-cert-file=/etc/webhook/certs/tls.crt
           - -tls-key-file=/etc/webhook/certs/tls.key
