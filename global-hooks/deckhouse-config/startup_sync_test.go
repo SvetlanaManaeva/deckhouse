@@ -156,6 +156,11 @@ spec:
 
 			f.KubeStateSet(existingModuleConfigs)
 
+			// Emulate migrated Deployment/deckhouse.
+			createDeckhouseDeployment(f.KubeClient(), map[string]string{
+				"ADDON_OPERATOR_CONFIG_MAP": d8config.GeneratedConfigMapName,
+			})
+
 			f.BindingContexts.Set(f.GenerateOnStartupContext())
 			f.RunHook()
 		})
@@ -200,6 +205,11 @@ spec:
 
 			f.KubeStateSet(existingConfigs)
 
+			// Emulate migrated Deployment/deckhouse.
+			createDeckhouseDeployment(f.KubeClient(), map[string]string{
+				"ADDON_OPERATOR_CONFIG_MAP": d8config.GeneratedConfigMapName,
+			})
+
 			// Use typed clientset for ConfigMap as the hook does.
 			cm := d8config.GeneratedConfigMap(map[string]string{
 				"global": "param2: val4",
@@ -239,6 +249,11 @@ spec:
     param1: val1
 `
 			f.KubeStateSet(existingModuleConfigs)
+
+			// Emulate migrated Deployment/deckhouse.
+			createDeckhouseDeployment(f.KubeClient(), map[string]string{
+				"ADDON_OPERATOR_CONFIG_MAP": d8config.GeneratedConfigMapName,
+			})
 
 			// Use typed clientset for ConfigMap as the hook does.
 			cm := d8config.GeneratedConfigMap(map[string]string{
@@ -352,4 +367,7 @@ func createDeckhouseDeployment(kubeClient client.Client, envs map[string]string)
 		Version:  "v1",
 		Resource: "deployments",
 	}).Namespace("d8-system").Create(context.TODO(), u, metav1.CreateOptions{})
+	// Workaround: startup_sync hook uses typed client to get deployment
+	// and then returns Patch that applied using Dynamic client.
+	_, _ = kubeClient.AppsV1().Deployments("d8-system").Create(context.TODO(), depl, metav1.CreateOptions{})
 }

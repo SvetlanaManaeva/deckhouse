@@ -77,7 +77,7 @@ var _ = Describe("Modules :: deckhouse-config :: hooks :: update DeckhouseConfig
 			Expect(f).To(ExecuteSuccessfully())
 
 			promCfg := f.KubernetesGlobalResource("DeckhouseConfig", "prometheus")
-			Expect(promCfg.Field("status.status").String()).To(Equal("Enabled"), "should update status")
+			Expect(promCfg.Field("status.enabled").String()).To(Equal("Enabled"), "should update status")
 		})
 	})
 
@@ -98,7 +98,7 @@ var _ = Describe("Modules :: deckhouse-config :: hooks :: update DeckhouseConfig
 			Expect(f).To(ExecuteSuccessfully())
 
 			promCfg := f.KubernetesGlobalResource("DeckhouseConfig", "prometheus")
-			Expect(promCfg.Field("status.status").String()).To(ContainSubstring("Disabled by script"), "should update status")
+			Expect(promCfg.Field("status.enabled").String()).To(ContainSubstring("Disabled by script"), "should update status")
 		})
 	})
 })
@@ -133,6 +133,14 @@ func (m *ModuleManagerMock) GetModule(name string) *module_manager.Module {
 	return nil
 }
 
+func (m *ModuleManagerMock) GetModuleNames() []string {
+	names := make([]string, 0)
+	for modName := range m.modules {
+		names = append(names, modName)
+	}
+	return names
+}
+
 func newMockedModule(name string, commonEnabled *bool, staticEnabled *bool) *module_manager.Module {
 	return &module_manager.Module{
 		Name: name,
@@ -142,5 +150,6 @@ func newMockedModule(name string, commonEnabled *bool, staticEnabled *bool) *mod
 		StaticConfig: &utils.ModuleConfig{
 			IsEnabled: staticEnabled,
 		},
+		State: &module_manager.ModuleState{},
 	}
 }
