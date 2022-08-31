@@ -99,13 +99,14 @@ func updateDeckhouseConfigStatuses(input *go_hook.HookInput, dc dependency.Conta
 	input.MetricsCollector.Expire(d8ConfigGroup)
 	for _, cfg := range allConfigs {
 		modName := cfg.GetName()
+		modChain := conversion.Registry().Chain(modName)
 
-		if !conversion.Registry().HasModule(modName) {
+		if modChain == nil {
 			continue
 		}
 
 		cfgVersion := cfg.Spec.ConfigVersion
-		latestVersion := conversion.Registry().LatestVersion(modName)
+		latestVersion := modChain.LatestVersion()
 
 		if cfgVersion != latestVersion {
 			input.MetricsCollector.Set(d8ConfigMetricName, 1.0, map[string]string{

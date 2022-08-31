@@ -16,23 +16,39 @@ limitations under the License.
 
 package conversion
 
-type ConversionFunc func(configVersion string, configValues map[string]interface{}) (string, map[string]interface{}, error)
+type ConversionFunc func(configValues map[string]interface{}) (map[string]interface{}, error)
 
 type Conversion interface {
-	Convert(configVersion string, configValues map[string]interface{}) (string, map[string]interface{}, error)
+	Source() string
+	Target() string
+	Convert(values map[string]interface{}) (map[string]interface{}, error)
 }
 
 type anonymousConversion struct {
-	fn ConversionFunc
+	src    string
+	target string
+	fn     ConversionFunc
 }
 
-func (a *anonymousConversion) Convert(configVersion string, configValues map[string]interface{}) (string, map[string]interface{}, error) {
+func (a *anonymousConversion) Source() string {
+	return a.src
+}
+
+func (a *anonymousConversion) Target() string {
+	return a.target
+}
+
+func (a *anonymousConversion) Convert(configValues map[string]interface{}) (map[string]interface{}, error) {
 	if a.fn != nil {
-		return a.fn(configVersion, configValues)
+		return a.fn(configValues)
 	}
-	return "", nil, nil
+	return nil, nil
 }
 
-func NewAnonymousConversion(conversionFunc ConversionFunc) Conversion {
-	return &anonymousConversion{fn: conversionFunc}
+func NewAnonymousConversion(srcVersion string, targetVersion string, conversionFunc ConversionFunc) Conversion {
+	return &anonymousConversion{
+		src:    srcVersion,
+		target: targetVersion,
+		fn:     conversionFunc,
+	}
 }

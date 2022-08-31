@@ -18,8 +18,6 @@ package conversion
 
 import (
 	"sync"
-
-	"github.com/Masterminds/semver/v3"
 )
 
 /*
@@ -41,107 +39,50 @@ func Registry() *ConvRegistry {
 }
 
 // Register adds Conversion implementation to Registry. Returns true to use with "var _ =".
-func Register(moduleName string, srcVersion string, conversion Conversion) bool {
-	Registry().Add(moduleName, srcVersion, conversion)
+func Register(moduleName string, conversion Conversion) bool {
+	Registry().Add(moduleName, conversion)
 	return true
 }
 
 // RegisterFunc adds a function as a Conversion to Registry. Returns true to use with "var _ =".
-func RegisterFunc(moduleName string, srcVersion string, conversionFunc ConversionFunc) bool {
-	Registry().Add(moduleName, srcVersion, NewAnonymousConversion(conversionFunc))
+func RegisterFunc(moduleName string, srcVersion string, targetVersion string, conversionFunc ConversionFunc) bool {
+	Registry().Add(moduleName, NewAnonymousConversion(srcVersion, targetVersion, conversionFunc))
 	return true
 }
 
 type ConvRegistry struct {
-	// module name -> version -> convertor
-	conversions map[string]map[string]Conversion
-
-	// module name -> latest version
-	latestVersions map[string]*semver.Version
+	// module name -> module chain
+	chains map[string]*ModuleChain
 
 	m sync.RWMutex
 }
 
-func (r *ConvRegistry) Add(moduleName string, srcVersion string, conversion Conversion) {
+func (r *ConvRegistry) Add(moduleName string, conversion Conversion) {
 	r.m.Lock()
 	defer r.m.Unlock()
 
-	srcSemver := semver.MustParse(srcVersion)
-
-	if r.conversions == nil {
-		r.conversions = make(map[string]map[string]Conversion)
+	if r.chains == nil {
+		r.chains = make(map[string]*ModuleChain)
 	}
-	if _, has := r.conversions[moduleName]; !has {
-		r.conversions[moduleName] = make(map[string]Conversion)
+	if _, has := r.chains[moduleName]; !has {
+		r.chains[moduleName] = NewModuleChain(moduleName)
 	}
 
-	r.conversions[moduleName][srcVersion] = conversion
-
-	// Update latest version.
-	if r.latestVersions == nil {
-		r.latestVersions = make(map[string]*semver.Version)
-	}
-
-	storedVersion, has := r.latestVersions[moduleName]
-	if !has || srcSemver.GreaterThan(storedVersion) {
-		r.latestVersions[moduleName] = srcSemver
-	}
+	r.chains[moduleName].Add(conversion)
 }
 
-func (r *ConvRegistry) Get(moduleName string, srcVersion string) Conversion {
+func (r *ConvRegistry) Chain(moduleName string) *ModuleChain {
 	r.m.RLock()
 	defer r.m.RUnlock()
-	if r.conversions == nil {
-		return nil
-	}
-	if _, has := r.conversions[moduleName]; !has {
-		return nil
-	}
-	return r.conversions[moduleName][srcVersion]
+
+	return r.chains[moduleName]
 }
 
-func (r *ConvRegistry) LatestVersion(moduleName string) string {
-	storedVersion := r.latestVersions[moduleName]
-	if storedVersion != nil {
-		return storedVersion.Original()
-	}
-	return ""
-}
-
-// Count returns a number of registered conversions for the module.
-func (r *ConvRegistry) Count(moduleName string) int {
+// HasChain returns whether module has registered conversions.
+func (r *ConvRegistry) HasChain(moduleName string) bool {
 	r.m.RLock()
 	defer r.m.RUnlock()
-	return len(r.conversions[moduleName])
-}
 
-// HasModule returns whether module has registered conversions.
-func (r *ConvRegistry) HasModule(moduleName string) bool {
-	r.m.RLock()
-	defer r.m.RUnlock()
-	_, has := r.conversions[moduleName]
+	_, has := r.chains[moduleName]
 	return has
-}
-
-// HasVersion returns whether module has registered conversion for version.
-func (r *ConvRegistry) HasVersion(moduleName string, version string) bool {
-	r.m.RLock()
-	defer r.m.RUnlock()
-	_, has := r.conversions[moduleName]
-	if has {
-		_, has = r.conversions[moduleName][version]
-		return has
-	}
-	return false
-}
-
-// VersionList returns all versions for the module.
-func (r *ConvRegistry) VersionList(moduleName string) []string {
-	r.m.RLock()
-	defer r.m.RUnlock()
-	versions := make([]string, 0)
-	for ver := range r.conversions[moduleName] {
-		versions = append(versions, ver)
-	}
-	return versions
 }

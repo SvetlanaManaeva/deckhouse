@@ -58,14 +58,14 @@ var _ = Describe("Module :: openvpn :: config values conversions :: to latest", 
 	f := SetupConverter(``)
 
 	Context("v0.0.0", func() {
-		const v0_0_0_Values = `
+		const v0Values = `
 inlet: ExternalIP
 hostPort: 2222
 storageClass: default
 `
 
 		BeforeEach(func() {
-			f.ValuesSetFromYaml(".", v0_0_0_Values)
+			f.ValuesSetFromYaml(".", v0Values)
 			f.ConvertToLatest("v0.0.0")
 		})
 

@@ -16,6 +16,9 @@ limitations under the License.
 
 package config_values_conversion
 
+// Example conversion to demonstrate migrating from "flat" fields to a dedicated object.
+
+/*
 import (
 	"strings"
 
@@ -24,19 +27,9 @@ import (
 
 const moduleName = "cert-manager"
 
-var _ = conversion.RegisterFunc(moduleName, "v0.0.0", func(configVersion string, configValues map[string]interface{}) (string, map[string]interface{}, error) {
-	newVals, err := convertV0ToV1(configValues)
-	return "v1.0.0", newVals, err
-})
+var _ = conversion.RegisterFunc(moduleName, "v0.0.0", "v1.0.0", convertV0ToV1)
 
-var _ = conversion.RegisterFunc(moduleName, "v1.0.0", func(configVersion string, configValues map[string]interface{}) (string, map[string]interface{}, error) {
-	newVals, err := convertV1ToV2(configValues)
-	return "v2.0.0", newVals, err
-})
-
-var _ = conversion.RegisterFunc(moduleName, "v2.0.0", func(configVersion string, configValues map[string]interface{}) (string, map[string]interface{}, error) {
-	return "v2.0.0", configValues, nil
-})
+var _ = conversion.RegisterFunc(moduleName, "v1.0.0", "v2.0.0", convertV1ToV2)
 
 func convertV1ToV2(values map[string]interface{}) (map[string]interface{}, error) {
 	return values, nil
@@ -62,3 +55,5 @@ func convertV0ToV1(values map[string]interface{}) (map[string]interface{}, error
 
 	return newValues, nil
 }
+
+*/

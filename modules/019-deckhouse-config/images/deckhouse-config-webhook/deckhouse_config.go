@@ -79,8 +79,9 @@ func (c *DeckhouseConfigValidator) Validate(_ context.Context, review *kwhmodel.
 
 	// Reject new objects with unknown version.
 	if review.Operation == kwhmodel.OperationCreate {
-		if conversion.Registry().HasModule(cfg.GetName()) && !conversion.Registry().HasVersion(cfg.GetName(), cfg.Spec.ConfigVersion) {
-			supported := conversion.Registry().VersionList(cfg.GetName())
+		chain := conversion.Registry().Chain(cfg.GetName())
+		if chain != nil && !chain.HasVersion(cfg.Spec.ConfigVersion) {
+			supported := chain.VersionList()
 			return rejectResult(fmt.Sprintf("spec.configVersion has invalid value. Supported versions: %s", strings.Join(supported, ", ")))
 		}
 	}

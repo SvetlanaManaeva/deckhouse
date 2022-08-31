@@ -22,10 +22,7 @@ import (
 
 const moduleName = "openvpn"
 
-var _ = conversion.RegisterFunc(moduleName, "v0.0.0", func(configVersion string, configValues map[string]interface{}) (string, map[string]interface{}, error) {
-	newVals, err := convertV0ToV1(configValues)
-	return "v1.0.0", newVals, err
-})
+var _ = conversion.RegisterFunc(moduleName, "v0.0.0", "v1.0.0", convertV0ToV1)
 
 // convertV0ToV1 removes storageClass field.
 func convertV0ToV1(values map[string]interface{}) (map[string]interface{}, error) {

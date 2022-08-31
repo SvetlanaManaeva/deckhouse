@@ -26,18 +26,17 @@ func Test_conv_to_latest(t *testing.T) {
 	g := NewWithT(t)
 
 	const modName = "test-mod"
-	RegisterFunc(modName, "v0.0.0", func(configVersion string, configValues map[string]interface{}) (string, map[string]interface{}, error) {
+	RegisterFunc(modName, "v0.0.0", "v1.0.0", func(configValues map[string]interface{}) (map[string]interface{}, error) {
 		configValues["param2"] = "val2"
-		return "v1.0.0", configValues, nil
-	})
-	RegisterFunc(modName, "v1.0.0", func(configVersion string, configValues map[string]interface{}) (string, map[string]interface{}, error) {
-		return configVersion, configValues, nil
+		return configValues, nil
 	})
 
 	v0Vals := map[string]interface{}{
 		"param1": "val1",
 	}
-	newVer, newVals, err := ConvertToLatest(modName, "v0.0.0", v0Vals)
+	chain := Registry().Chain(modName)
+	g.Expect(chain).ShouldNot(BeNil())
+	newVer, newVals, err := chain.ConvertToLatest("v0.0.0", v0Vals)
 	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(newVer).Should(Equal("v1.0.0"))
 	g.Expect(newVals).Should(HaveKey("param1"), "should keep old params")

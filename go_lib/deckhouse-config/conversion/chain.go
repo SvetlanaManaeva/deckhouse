@@ -16,31 +16,73 @@ limitations under the License.
 
 package conversion
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
 
-func ConvertToLatest(moduleName string, fromVersion string, values map[string]interface{}) (string, map[string]interface{}, error) {
-	maxTries := Registry().Count(moduleName)
+	"github.com/Masterminds/semver/v3"
+)
+
+// ModuleChain is a chain of conversions for module.
+type ModuleChain struct {
+	m sync.RWMutex
+
+	moduleName string
+
+	// version -> convertor
+	conversions map[string]Conversion
+
+	latestVersion *semver.Version
+}
+
+func NewModuleChain(moduleName string) *ModuleChain {
+	return &ModuleChain{
+		moduleName:  moduleName,
+		conversions: make(map[string]Conversion),
+	}
+}
+
+func (c *ModuleChain) Add(conversion Conversion) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.conversions[conversion.Source()] = conversion
+
+	// Update latest version.
+	dstSemver := semver.MustParse(conversion.Target())
+
+	if c.latestVersion == nil || dstSemver.GreaterThan(c.latestVersion) {
+		c.latestVersion = dstSemver
+	}
+}
+
+func (c *ModuleChain) ConvertToLatest(fromVersion string, values map[string]interface{}) (string, map[string]interface{}, error) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	maxTries := len(c.conversions)
 
 	tries := 0
-	version := fromVersion
-	convValues := values
+	currentVersion := fromVersion
+	currentValues := values
 	for {
-		conv := Registry().Get(moduleName, version)
+		conv := c.conversions[currentVersion]
 		if conv == nil {
-			return "", nil, fmt.Errorf("convert from %s: conversion chain interrupt: no conversion for %s", fromVersion, version)
+			return "", nil, fmt.Errorf("convert from %s: conversion chain interrupt: no conversion from %s", fromVersion, currentVersion)
 		}
-		newVer, newValues, err := conv.Convert(version, convValues)
+		newVer := conv.Target()
+		newValues, err := conv.Convert(currentValues)
 		if err != nil {
-			return "", nil, fmt.Errorf("convert from %s: conversion chain error for %s: %v", fromVersion, version, err)
+			return "", nil, fmt.Errorf("convert from %s: conversion chain error for %s: %v", fromVersion, currentVersion, err)
 		}
 
-		version = newVer
-		convValues = newValues
-
-		// Conversion for the latest version returns same version.
-		if version == newVer {
-			return version, newValues, nil
+		// Stop after converting to the latest version.
+		if newVer == c.latestVersion.Original() {
+			return newVer, newValues, nil
 		}
+
+		currentVersion = newVer
+		currentValues = newValues
 
 		// Prevent looped conversions.
 		tries++
@@ -48,4 +90,43 @@ func ConvertToLatest(moduleName string, fromVersion string, values map[string]in
 			return "", nil, fmt.Errorf("convert from %s: conversion chain too long or looped", fromVersion)
 		}
 	}
+}
+
+func (c *ModuleChain) Conversion(srcVersion string) Conversion {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.conversions[srcVersion]
+}
+
+func (c *ModuleChain) LatestVersion() string {
+	return c.latestVersion.Original()
+}
+
+// Count returns a number of registered conversions for the module.
+func (c *ModuleChain) Count() int {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return len(c.conversions)
+}
+
+// HasVersion returns whether module has registered conversion for version.
+func (c *ModuleChain) HasVersion(version string) bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	_, has := c.conversions[version]
+	return has
+}
+
+// VersionList returns all versions for the module.
+func (c *ModuleChain) VersionList() []string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	versions := make([]string, 0)
+	for ver := range c.conversions {
+		versions = append(versions, ver)
+	}
+	return versions
 }

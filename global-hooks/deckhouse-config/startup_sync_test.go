@@ -62,7 +62,7 @@ param2: val2
 			Expect(registryErr).ShouldNot(HaveOccurred(), "modules registry should be inited")
 			Expect(f).To(ExecuteSuccessfully())
 			cfgObjs, err := f.KubeClient().Dynamic().Resource(d8config_v1.GroupVersionResource()).List(context.TODO(), metav1.ListOptions{})
-			cfgList := expectConfigItems(cfgObjs, modules.Registry().GetPossibleNames(), err)
+			cfgList := expectConfigItems(cfgObjs, err)
 
 			// Test global section.
 			globalCfg := cfgList["global"]
@@ -111,7 +111,7 @@ param1: val1
 			Expect(f).To(ExecuteSuccessfully())
 			cfgObjs, err := f.KubeClient().Dynamic().Resource(d8config_v1.GroupVersionResource()).List(context.TODO(), metav1.ListOptions{})
 
-			cfgList := expectConfigItems(cfgObjs, modules.Registry().GetPossibleNames(), err)
+			cfgList := expectConfigItems(cfgObjs, err)
 
 			for _, name := range []string{"global", "deckhouse", "cert-manager"} {
 				cfg := cfgList[name]
@@ -165,7 +165,7 @@ spec:
 			Expect(f).To(ExecuteSuccessfully())
 
 			cfgList, err := f.KubeClient().Dynamic().Resource(d8config_v1.GroupVersionResource()).List(context.TODO(), metav1.ListOptions{})
-			_ = expectConfigItems(cfgList, modules.Registry().GetPossibleNames(), err)
+			_ = expectConfigItems(cfgList, err)
 
 			gcm := f.KubernetesResource("ConfigMap", "d8-system", d8config.GeneratedConfigMapName)
 			Expect(gcm.Exists()).Should(BeTrue(), "should create ConfigMap from DeckhouseConfig")
@@ -215,7 +215,7 @@ spec:
 			Expect(f).To(ExecuteSuccessfully())
 
 			cfgList, err := f.KubeClient().Dynamic().Resource(d8config_v1.GroupVersionResource()).List(context.TODO(), metav1.ListOptions{})
-			_ = expectConfigItems(cfgList, modules.Registry().GetPossibleNames(), err)
+			_ = expectConfigItems(cfgList, err)
 
 			gcm := f.KubernetesResource("ConfigMap", "d8-system", d8config.GeneratedConfigMapName)
 			Expect(gcm.Exists()).Should(BeTrue(), "should not delete generated ConfigMap")
@@ -251,29 +251,23 @@ spec:
 			f.RunHook()
 		})
 
-		It("Should create DeckhouseConfig for all modules", func() {
+		It("Should update generated ConfigMap", func() {
 			Expect(registryErr).ShouldNot(HaveOccurred(), "modules registry should be inited")
 			Expect(f).To(ExecuteSuccessfully())
 
 			cfgList, err := f.KubeClient().Dynamic().Resource(d8config_v1.GroupVersionResource()).List(context.TODO(), metav1.ListOptions{})
-			_ = expectConfigItems(cfgList, modules.Registry().GetPossibleNames(), err)
+			_ = expectConfigItems(cfgList, err)
 
 			gcm := f.KubernetesResource("ConfigMap", "d8-system", d8config.GeneratedConfigMapName)
 			Expect(gcm.Exists()).Should(BeTrue(), "should not delete generated ConfigMap")
 			Expect(gcm.Field("data").Map()).Should(HaveLen(1), "generated ConfigMap should have sections only for existing DeckhouseConfig objects")
 			Expect(gcm.Field("data.global").String()).Should(Equal("param1: val1\n"))
-			//Expect(gcm.Field("data.deckhouse").String()).Should(Equal("logLevel: Debug\n"))
-
-			//deckhouseCfg := f.KubernetesGlobalResource("DeckhouseConfig", "deckhouse")
-			//Expect(deckhouseCfg.Exists()).Should(BeTrue(), "should have DeckhouseConfig/deckhouse")
-			//Expect(deckhouseCfg.Field("spec.configValues.logLevel").String()).Should(Equal("Debug"), "DeckhouseConfig/deckhouse should have logLevel=Debug from ConfigMap")
 		})
 	})
 })
 
-func expectConfigItems(list *unstructured.UnstructuredList, possibleNames []string, err error) map[string]*d8config_v1.DeckhouseConfig {
+func expectConfigItems(list *unstructured.UnstructuredList, err error) map[string]*d8config_v1.DeckhouseConfig {
 	Expect(err).ShouldNot(HaveOccurred(), "should get list of existing DeckhouseConfig objects")
-	//Expect(list.Items).Should(HaveLen(len(possibleNames)), "should create DeckhouseConfig for each possible name")
 
 	cfgs := make(map[string]*d8config_v1.DeckhouseConfig)
 	for _, cfg := range list.Items {
