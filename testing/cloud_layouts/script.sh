@@ -290,7 +290,11 @@ function run-test() {
   fi
 
   wait_cluster_ready "$ssh_private_key_path" "$ssh_user" "${master_ip}"
-  run_helm_tests "$ssh_private_key_path" "$ssh_user" "${master_ip}"
+
+  # TODO: replace with testing framework: https://github.com/deckhouse/deckhouse/issues/2380
+  if [[ "$PROVIDER" == "Static" ]]; then
+    run_linstor_tests "$ssh_private_key_path" "$ssh_user" "${master_ip}"
+  fi
 }
 
 function bootstrap_static() {
@@ -533,19 +537,21 @@ ENDSSH
   fi
 }
 
-# run_helm_tests executes helm tests for all deckhouse modules
+# run_linstor_tests executes helm test for linstor module
 #
 # Arguments:
 #  - ssh_private_key_path
 #  - ssh_user
 #  - master_ip
-function run_helm_tests() {
+#
+# TODO: replace with testing framework: https://github.com/deckhouse/deckhouse/issues/2380
+function run_linstor_tests() {
   test_failed=
 
   testScript=$(cat <<"END_SCRIPT"
 set -Eeuo pipefail
 >&2 echo "Running Deckhouse helm suit tests ..."
-kubectl -n d8-system exec deploy/deckhouse -- sh -c "helm ls -n d8-system | awk 'NR>2 {print \"helm test -n d8-system \" \$1}' | sh -ex"
+kubectl -n d8-system exec deploy/deckhouse -- helm test -n d8-system linstor
 END_SCRIPT
 )
 
