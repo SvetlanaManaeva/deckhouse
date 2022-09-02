@@ -112,6 +112,24 @@ func generateNGsAndMCs(durationStrings ...string) string {
 
 	var builder strings.Builder
 	builder.WriteString(`---
+apiVersion: v1
+kind: Node
+metadata:
+  name: test
+  creationTimestamp: "1970-01-01T00:00:00Z"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: not-preemptible
+  creationTimestamp: "1970-01-01T00:00:00Z"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: wrong-instance-class
+  creationTimestamp: "1970-01-01T00:00:00Z"
+---
 apiVersion: machine.sapcloud.io/v1alpha1
 kind: YandexMachineClass
 metadata:
@@ -159,17 +177,22 @@ spec:
 		}
 
 		_, _ = builder.WriteString(fmt.Sprintf(`---
+apiVersion: v1
+kind: Node
+metadata:
+  name: test-%d
+  creationTimestamp: %s
+---
 apiVersion: machine.sapcloud.io/v1alpha1
 kind: Machine
 metadata:
   name: test-%d
   namespace: d8-cloud-instance-manager
-  creationTimestamp: %s
 spec:
   class:
     kind: YandexMachineClass
     name: test
-`, i, string(ts)))
+`, i, string(ts), i))
 	}
 
 	return builder.String()
