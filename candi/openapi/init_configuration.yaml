@@ -3,8 +3,34 @@ apiVersions:
 - apiVersion: deckhouse.io/v1
   openAPISpec:
     type: object
+    description: |
+      Initial Deckhouse parameters.
+
+      Configuration with which Deckhouse will start after installation.
     additionalProperties: false
     required: [apiVersion, kind, deckhouse]
+    x-examples:
+    - apiVersion: deckhouse.io/v1
+      kind: InitConfiguration
+      releaseChannel: Stable
+      imagesRepo: nexus.company.my/deckhouse/ee
+      registryDockerCfg: eyJhdXRocyI6IHsgIm5leHVzLmNvbXBhbnkubXkiOiB7InVzZXJuYW1lIjoibmV4dXMtdXNlciIsInBhc3N3b3JkIjoibmV4dXMtcEBzc3cwcmQiLCJhdXRoIjoiYm1WNGRYTXRkWE5sY2pwdVpYaDFjeTF3UUhOemR6QnlaQW89In19fQo=
+      registryScheme: HTTPS
+      registryCA: |
+        -----BEGIN CERTIFICATE-----
+        ...
+        -----END CERTIFICATE-----
+      configOverrides:
+        global:
+          modules:
+            publicDomainTemplate: "%s.kube.company.my"
+            proxy:
+              httpProxy: http://proxy.company.my
+              httpsProxy: https://proxy.company.my
+              noProxy: ["192.168.0.0/24", "company.my", ".company.my"]
+        cniFlannelEnabled: true
+        cniFlannel:
+          podNetworkMode: VXLAN
     properties:
       apiVersion:
         type: string

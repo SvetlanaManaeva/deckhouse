@@ -1,6 +1,10 @@
 apiVersions:
 - apiVersion: deckhouse.io/v1
   openAPISpec:
+    description: |
+      Начальные параметры Deckhouse.
+
+      Параметры конфигурации с которой запустится Deckhouse после установки.
     properties:
       apiVersion:
         type: string
