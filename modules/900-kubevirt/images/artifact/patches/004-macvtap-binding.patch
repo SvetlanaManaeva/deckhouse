@@ -1,0 +1,839 @@
+diff --git a/pkg/virt-config/feature-gates.go b/pkg/virt-config/feature-gates.go
+index c437e0db2fe..9717a8521fb 100644
+--- a/pkg/virt-config/feature-gates.go
++++ b/pkg/virt-config/feature-gates.go
+@@ -30,24 +30,26 @@ const (
+ 	IgnitionGate      = "ExperimentalIgnitionSupport"
+ 	LiveMigrationGate = "LiveMigration"
+ 	// SRIOVLiveMigrationGate enable's Live Migration for VM's with SRIOV interfaces.
+-	SRIOVLiveMigrationGate     = "SRIOVLiveMigration"
+-	CPUNodeDiscoveryGate       = "CPUNodeDiscovery"
+-	HypervStrictCheckGate      = "HypervStrictCheck"
+-	SidecarGate                = "Sidecar"
+-	GPUGate                    = "GPU"
+-	HostDevicesGate            = "HostDevices"
+-	SnapshotGate               = "Snapshot"
+-	VMExportGate               = "VMExport"
+-	HotplugVolumesGate         = "HotplugVolumes"
+-	HostDiskGate               = "HostDisk"
+-	VirtIOFSGate               = "ExperimentalVirtiofsSupport"
+-	MacvtapGate                = "Macvtap"
+-	PasstGate                  = "Passt"
+-	DownwardMetricsFeatureGate = "DownwardMetrics"
+-	NonRootDeprecated          = "NonRootExperimental"
+-	NonRoot                    = "NonRoot"
+-	ClusterProfiler            = "ClusterProfiler"
+-	WorkloadEncryptionSEV      = "WorkloadEncryptionSEV"
++	SRIOVLiveMigrationGate = "SRIOVLiveMigration"
++	// NetworkAwareLiveMigrationGate enable's Live Migration for VM's with bridged pod network
++	NetworkAwareLiveMigrationGate = "NetworkAwareLiveMigration"
++	CPUNodeDiscoveryGate          = "CPUNodeDiscovery"
++	HypervStrictCheckGate         = "HypervStrictCheck"
++	SidecarGate                   = "Sidecar"
++	GPUGate                       = "GPU"
++	HostDevicesGate               = "HostDevices"
++	SnapshotGate                  = "Snapshot"
++	VMExportGate                  = "VMExport"
++	HotplugVolumesGate            = "HotplugVolumes"
++	HostDiskGate                  = "HostDisk"
++	VirtIOFSGate                  = "ExperimentalVirtiofsSupport"
++	MacvtapGate                   = "Macvtap"
++	PasstGate                     = "Passt"
++	DownwardMetricsFeatureGate    = "DownwardMetrics"
++	NonRootDeprecated             = "NonRootExperimental"
++	NonRoot                       = "NonRoot"
++	ClusterProfiler               = "ClusterProfiler"
++	WorkloadEncryptionSEV         = "WorkloadEncryptionSEV"
+ )
+ 
+ var deprecatedFeatureGates = [...]string{
+@@ -107,6 +109,10 @@ func (config *ClusterConfig) SRIOVLiveMigrationEnabled() bool {
+ 	return config.isFeatureGateEnabled(SRIOVLiveMigrationGate)
+ }
+ 
++func (config *ClusterConfig) NetworkAwareLiveMigrationEnabled() bool {
++	return config.isFeatureGateEnabled(NetworkAwareLiveMigrationGate)
++}
++
+ func (config *ClusterConfig) HypervStrictCheckEnabled() bool {
+ 	return config.isFeatureGateEnabled(HypervStrictCheckGate)
+ }
+diff --git a/pkg/virt-handler/vm.go b/pkg/virt-handler/vm.go
+index 041b2e7700f..57be710d9a0 100644
+--- a/pkg/virt-handler/vm.go
++++ b/pkg/virt-handler/vm.go
+@@ -2230,8 +2230,9 @@ func (d *VirtualMachineController) checkNetworkInterfacesForMigration(vmi *v1.Vi
+ 		return nil
+ 	}
+ 
+-	if !netvmispec.IsPodNetworkWithMasqueradeBindingInterface(vmi.Spec.Networks, ifaces) {
+-		return fmt.Errorf("cannot migrate VMI which does not use masquerade to connect to the pod network")
++	networkAwareLiveMigrationEnabled := d.clusterConfig.NetworkAwareLiveMigrationEnabled()
++	if !netvmispec.IsPodNetworkWithMasqueradeBindingInterface(vmi.Spec.Networks, ifaces) && !networkAwareLiveMigrationEnabled {
++		return fmt.Errorf("NetworkAwareLiveMigration feature-gate is closed, cannot migrate VMI which does not use masquerade to connect to the pod network")
+ 	}
+ 
+ 	sriovLiveMigrationEnabled := d.clusterConfig.SRIOVLiveMigrationEnabled()
+diff --git a/pkg/virt-handler/vm_test.go b/pkg/virt-handler/vm_test.go
+index 8f0106f6d2e..a5c8a8ffdf9 100644
+--- a/pkg/virt-handler/vm_test.go
++++ b/pkg/virt-handler/vm_test.go
+@@ -2414,7 +2414,7 @@ var _ = Describe("VirtualMachineInstance", func() {
+ 			Expect(condition.Reason).To(Equal(v1.VirtualMachineInstanceReasonVirtIOFSNotMigratable))
+ 		})
+ 
+-		It("should not be allowed to live-migrate if the VMI does not use masquerade to connect to the pod network", func() {
++		It("should not be allowed to live-migrate if the VMI does not use masquerade to connect to the pod network when feature-gate NetworkAwareLiveMigration is off", func() {
+ 			vmi := api2.NewMinimalVMI("testvmi")
+ 
+ 			strategy := v1.EvictionStrategyLiveMigrate
+@@ -2493,7 +2493,7 @@ var _ = Describe("VirtualMachineInstance", func() {
+ 		})
+ 
+ 		Context("with network configuration", func() {
+-			It("should block migration for bridge binding assigned to the pod network", func() {
++			It("should block migration for bridge binding assigned to the pod network when feature-gate NetworkAwareLiveMigration is off", func() {
+ 				vmi := api2.NewMinimalVMI("testvmi")
+ 				interface_name := "interface_name"
+ 
+@@ -2515,6 +2515,36 @@ var _ = Describe("VirtualMachineInstance", func() {
+ 				err := controller.checkNetworkInterfacesForMigration(vmi)
+ 				Expect(err).To(HaveOccurred())
+ 			})
++			It("should not block migration for bridge binding assigned to the pod network when feature-gate NetworkAwareLiveMigration is on", func() {
++				vmi := api2.NewMinimalVMI("testvmi")
++				interface_name := "interface_name"
++
++				vmi.Spec.Networks = []v1.Network{
++					{
++						Name:          interface_name,
++						NetworkSource: v1.NetworkSource{Pod: &v1.PodNetwork{}},
++					},
++				}
++				vmi.Spec.Domain.Devices.Interfaces = []v1.Interface{
++					{
++						Name: interface_name,
++						InterfaceBindingMethod: v1.InterfaceBindingMethod{
++							Bridge: &v1.InterfaceBridge{},
++						},
++					},
++				}
++				config, _, _ := testutils.NewFakeClusterConfigUsingKVConfig(&v1.KubeVirtConfiguration{
++					DeveloperConfiguration: &v1.DeveloperConfiguration{
++						FeatureGates: []string{virtconfig.NetworkAwareLiveMigrationGate},
++					},
++				})
++				controller.clusterConfig = config
++
++				Expect(controller.checkNetworkInterfacesForMigration(vmi)).Should(Succeed())
++
++				err := controller.checkNetworkInterfacesForMigration(vmi)
++				Expect(err).To(BeNil())
++			})
+ 			It("should block migration for VMI with SRIOV interface when feature-gate SRIOVLiveMigration is off", func() {
+ 				vmi := api2.NewMinimalVMI("testvmi")
+ 				sriovInterfaceName := "sriovnet1"
+diff --git a/pkg/virt-launcher/virtwrap/BUILD.bazel b/pkg/virt-launcher/virtwrap/BUILD.bazel
+index 0585ff85cff..47910da1b1e 100644
+--- a/pkg/virt-launcher/virtwrap/BUILD.bazel
++++ b/pkg/virt-launcher/virtwrap/BUILD.bazel
+@@ -71,6 +71,8 @@ go_test(
+         "//pkg/ephemeral-disk-utils:go_default_library",
+         "//pkg/ephemeral-disk/fake:go_default_library",
+         "//pkg/handler-launcher-com/cmd/v1:go_default_library",
++        "//pkg/network/cache:go_default_library",
++        "//pkg/os/fs:go_default_library",
+         "//pkg/util/net/ip:go_default_library",
+         "//pkg/virt-handler/cmd-client:go_default_library",
+         "//pkg/virt-launcher/virtwrap/agent-poller:go_default_library",
+diff --git a/pkg/virt-launcher/virtwrap/api/deepcopy_generated.go b/pkg/virt-launcher/virtwrap/api/deepcopy_generated.go
+index d8c2169cf2c..638fac7e772 100644
+--- a/pkg/virt-launcher/virtwrap/api/deepcopy_generated.go
++++ b/pkg/virt-launcher/virtwrap/api/deepcopy_generated.go
+@@ -1843,6 +1843,7 @@ func (in *Input) DeepCopy() *Input {
+ // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+ func (in *Interface) DeepCopyInto(out *Interface) {
+ 	*out = *in
++	out.XMLName = in.XMLName
+ 	if in.Address != nil {
+ 		in, out := &in.Address, &out.Address
+ 		*out = new(Address)
+diff --git a/pkg/virt-launcher/virtwrap/api/schema.go b/pkg/virt-launcher/virtwrap/api/schema.go
+index 74405fab105..d1bac46817f 100644
+--- a/pkg/virt-launcher/virtwrap/api/schema.go
++++ b/pkg/virt-launcher/virtwrap/api/schema.go
+@@ -716,6 +716,7 @@ type ConsoleSource struct {
+ // BEGIN Inteface -----------------------------
+ 
+ type Interface struct {
++	XMLName             xml.Name         `xml:"interface"`
+ 	Address             *Address         `xml:"address,omitempty"`
+ 	Type                string           `xml:"type,attr"`
+ 	TrustGuestRxFilters string           `xml:"trustGuestRxFilters,attr,omitempty"`
+diff --git a/pkg/virt-launcher/virtwrap/cli/generated_mock_libvirt.go b/pkg/virt-launcher/virtwrap/cli/generated_mock_libvirt.go
+index c54c0e4fec7..4816db7a605 100644
+--- a/pkg/virt-launcher/virtwrap/cli/generated_mock_libvirt.go
++++ b/pkg/virt-launcher/virtwrap/cli/generated_mock_libvirt.go
+@@ -553,6 +553,16 @@ func (_mr *_MockVirDomainRecorder) SetTime(arg0, arg1, arg2 interface{}) *gomock
+ 	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetTime", arg0, arg1, arg2)
+ }
+ 
++func (_m *MockVirDomain) UpdateDeviceFlags(xml string, flags libvirt.DomainDeviceModifyFlags) error {
++	ret := _m.ctrl.Call(_m, "UpdateDeviceFlags", xml, flags)
++	ret0, _ := ret[0].(error)
++	return ret0
++}
++
++func (_mr *_MockVirDomainRecorder) UpdateDeviceFlags(arg0, arg1 interface{}) *gomock.Call {
++	return _mr.mock.ctrl.RecordCall(_mr.mock, "UpdateDeviceFlags", arg0, arg1)
++}
++
+ func (_m *MockVirDomain) IsPersistent() (bool, error) {
+ 	ret := _m.ctrl.Call(_m, "IsPersistent")
+ 	ret0, _ := ret[0].(bool)
+diff --git a/pkg/virt-launcher/virtwrap/cli/libvirt.go b/pkg/virt-launcher/virtwrap/cli/libvirt.go
+index ab537fc792b..5dc1ad90bf4 100644
+--- a/pkg/virt-launcher/virtwrap/cli/libvirt.go
++++ b/pkg/virt-launcher/virtwrap/cli/libvirt.go
+@@ -482,6 +482,7 @@ type VirDomain interface {
+ 	GetJobInfo() (*libvirt.DomainJobInfo, error)
+ 	GetDiskErrors(flags uint32) ([]libvirt.DomainDiskError, error)
+ 	SetTime(secs int64, nsecs uint, flags libvirt.DomainSetTimeFlags) error
++	UpdateDeviceFlags(xml string, flags libvirt.DomainDeviceModifyFlags) error
+ 	IsPersistent() (bool, error)
+ 	AbortJob() error
+ 	Free() error
+diff --git a/pkg/virt-launcher/virtwrap/generated_mock_manager.go b/pkg/virt-launcher/virtwrap/generated_mock_manager.go
+index a1e0e0c6238..3e01831b429 100644
+--- a/pkg/virt-launcher/virtwrap/generated_mock_manager.go
++++ b/pkg/virt-launcher/virtwrap/generated_mock_manager.go
+@@ -8,11 +8,43 @@ import (
+ 	v1 "kubevirt.io/api/core/v1"
+ 
+ 	v10 "kubevirt.io/kubevirt/pkg/handler-launcher-com/cmd/v1"
++	cache "kubevirt.io/kubevirt/pkg/network/cache"
+ 	cmd_client "kubevirt.io/kubevirt/pkg/virt-handler/cmd-client"
+ 	api "kubevirt.io/kubevirt/pkg/virt-launcher/virtwrap/api"
+ 	stats "kubevirt.io/kubevirt/pkg/virt-launcher/virtwrap/stats"
+ )
+ 
++// Mock of cacheCreator interface
++type MockcacheCreator struct {
++	ctrl     *gomock.Controller
++	recorder *_MockcacheCreatorRecorder
++}
++
++// Recorder for MockcacheCreator (not exported)
++type _MockcacheCreatorRecorder struct {
++	mock *MockcacheCreator
++}
++
++func NewMockcacheCreator(ctrl *gomock.Controller) *MockcacheCreator {
++	mock := &MockcacheCreator{ctrl: ctrl}
++	mock.recorder = &_MockcacheCreatorRecorder{mock}
++	return mock
++}
++
++func (_m *MockcacheCreator) EXPECT() *_MockcacheCreatorRecorder {
++	return _m.recorder
++}
++
++func (_m *MockcacheCreator) New(filePath string) *cache.Cache {
++	ret := _m.ctrl.Call(_m, "New", filePath)
++	ret0, _ := ret[0].(*cache.Cache)
++	return ret0
++}
++
++func (_mr *_MockcacheCreatorRecorder) New(arg0 interface{}) *gomock.Call {
++	return _mr.mock.ctrl.RecordCall(_mr.mock, "New", arg0)
++}
++
+ // Mock of DomainManager interface
+ type MockDomainManager struct {
+ 	ctrl     *gomock.Controller
+diff --git a/pkg/virt-launcher/virtwrap/live-migration-target.go b/pkg/virt-launcher/virtwrap/live-migration-target.go
+index c4ec4645d25..cf5fece2e1e 100644
+--- a/pkg/virt-launcher/virtwrap/live-migration-target.go
++++ b/pkg/virt-launcher/virtwrap/live-migration-target.go
+@@ -31,6 +31,7 @@ import (
+ 	diskutils "kubevirt.io/kubevirt/pkg/ephemeral-disk-utils"
+ 	cmdv1 "kubevirt.io/kubevirt/pkg/handler-launcher-com/cmd/v1"
+ 	"kubevirt.io/kubevirt/pkg/hooks"
++	"kubevirt.io/kubevirt/pkg/network/cache"
+ 	"kubevirt.io/kubevirt/pkg/util"
+ 	"kubevirt.io/kubevirt/pkg/util/net/ip"
+ 	migrationproxy "kubevirt.io/kubevirt/pkg/virt-handler/migration-proxy"
+@@ -39,6 +40,10 @@ import (
+ )
+ 
+ func (l *LibvirtDomainManager) finalizeMigrationTarget(vmi *v1.VirtualMachineInstance) error {
++	if err := l.reconnectGuestNics(vmi, cache.CacheCreator{}); err != nil {
++		return err
++	}
++
+ 	if err := l.setGuestTime(vmi); err != nil {
+ 		return err
+ 	}
+diff --git a/pkg/virt-launcher/virtwrap/manager.go b/pkg/virt-launcher/virtwrap/manager.go
+index 616226650a2..b85ac57d4af 100644
+--- a/pkg/virt-launcher/virtwrap/manager.go
++++ b/pkg/virt-launcher/virtwrap/manager.go
+@@ -86,6 +86,7 @@ import (
+ const (
+ 	failedSyncGuestTime             = "failed to sync guest time"
+ 	failedGetDomain                 = "Getting the domain failed."
++	failedReconnectGuestNic         = "failed to reconnect guest interfaces"
+ 	failedGetDomainState            = "Getting the domain state failed."
+ 	failedDomainMemoryDump          = "Domain memory dump failed"
+ 	affectLiveAndConfigLibvirtFlags = libvirt.DOMAIN_DEVICE_MODIFY_LIVE | libvirt.DOMAIN_DEVICE_MODIFY_CONFIG
+@@ -94,6 +95,10 @@ const (
+ const maxConcurrentHotplugHostDevices = 1
+ const maxConcurrentMemoryDumps = 1
+ 
++type cacheCreator interface {
++	New(filePath string) *cache.Cache
++}
++
+ type contextStore struct {
+ 	ctx    context.Context
+ 	cancel context.CancelFunc
+@@ -305,6 +310,117 @@ func (l *LibvirtDomainManager) setGuestTime(vmi *v1.VirtualMachineInstance) erro
+ 	return nil
+ }
+ 
++// Set interfaces link down and up to renew DHCP leases
++func (l *LibvirtDomainManager) reconnectGuestNics(vmi *v1.VirtualMachineInstance, c cacheCreator) error {
++	logger := log.Log.Object(vmi)
++	domName := api.VMINamespaceKeyFunc(vmi)
++	dom, err := l.virConn.LookupDomainByName(domName)
++	if err != nil {
++		log.Log.Object(vmi).Reason(err).Error(failedReconnectGuestNic)
++		return err
++	}
++	defer dom.Free()
++	xmlstr, err := dom.GetXMLDesc(0)
++	if err != nil {
++		return err
++	}
++
++	var domain api.DomainSpec
++	err = xml.Unmarshal([]byte(xmlstr), &domain)
++	if err != nil {
++		return fmt.Errorf("parsing domain XML failed, err: %v", err)
++	}
++
++	// Look up all the interfaces and reconnect them
++	for _, iface := range domain.Devices.Interfaces {
++		specIface := getIfaceByName(vmi, iface.Alias.GetName())
++
++		// TODO: support macvtap as well (PR #7648)
++		if specIface.Bridge == nil {
++			continue
++		}
++
++		cachedMAC, err := getIfaceMACAddressFromCache(iface, c)
++		if err != nil {
++			return fmt.Errorf("failed to get actual MAC address for network %s, err: %v", iface.Alias.GetName(), err)
++		}
++		if cachedMAC != "" && cachedMAC != iface.MAC.MAC {
++			logger.Info("MAC address for " + iface.Alias.GetName() + " network is changed. Reattaching interfaces")
++			err = reattachIfaceWithMacAddress(dom, iface, cachedMAC)
++		} else {
++			// TODO: should we check if local DHCP is running?
++			logger.Info("MAC address for " + iface.Alias.GetName() + " network does not require update. Forcing VM to renew DHCP lease")
++			err = reconnectIface(dom, iface)
++		}
++		if err != nil {
++			return fmt.Errorf("failed to update network %s, err: %v", iface.Alias.GetName(), err)
++		}
++	}
++
++	return nil
++}
++
++// Returns actual MAC address for NIC
++func getIfaceMACAddressFromCache(iface api.Interface, c cacheCreator) (string, error) {
++	if iface.MAC == nil {
++		return "", nil
++	}
++	cachedIface, err := cache.ReadDomainInterfaceCache(c, "1", iface.Alias.GetName())
++	if os.IsNotExist(err) {
++		return iface.MAC.MAC, nil
++	}
++	if err != nil {
++		return iface.MAC.MAC, fmt.Errorf("failed to read pod interface network state from cache %s", err.Error())
++	}
++	return cachedIface.MAC.MAC, nil
++}
++
++// Reattaches NIC with new MAC Address
++func reattachIfaceWithMacAddress(dom cli.VirDomain, iface api.Interface, mac string) error {
++	ifaceBytes, err := xml.Marshal(iface)
++	if err != nil {
++		return fmt.Errorf("failed to encode (xml) interface, err: %v", err)
++	}
++	newIface := iface.DeepCopy()
++	newIface.MAC.MAC = mac
++	newIfaceBytes, err := xml.Marshal(newIface)
++	if err != nil {
++		return fmt.Errorf("failed to encode (xml) interface, err: %v", err)
++	}
++	err = dom.DetachDevice(string(ifaceBytes))
++	if err != nil {
++		return fmt.Errorf("failed to detach network interface, err: %v", err)
++	}
++	err = dom.AttachDevice(string(newIfaceBytes))
++	if err != nil {
++		return fmt.Errorf("failed to attach network interface, err: %v", err)
++	}
++	return nil
++}
++
++// Sets link down and up for specified interface
++func reconnectIface(dom cli.VirDomain, iface api.Interface) error {
++	ifaceBytes, err := xml.Marshal(iface)
++	if err != nil {
++		return fmt.Errorf("failed to encode (xml) interface, err: %v", err)
++	}
++	disconnectedIface := iface.DeepCopy()
++	disconnectedIface.LinkState = &api.LinkState{State: "down"}
++	disconnectedIfaceBytes, err := xml.Marshal(disconnectedIface)
++	if err != nil {
++		return fmt.Errorf("failed to encode (xml) interface, err: %v", err)
++	}
++	err = dom.UpdateDeviceFlags(string(disconnectedIfaceBytes), affectLiveAndConfigLibvirtFlags)
++	if err != nil {
++		return fmt.Errorf("failed to set link down, err: %v", err)
++	}
++	err = dom.UpdateDeviceFlags(string(ifaceBytes), affectLiveAndConfigLibvirtFlags)
++	if err != nil {
++		return fmt.Errorf("failed to set link up, err: %v", err)
++	}
++	return nil
++}
++
+ func (l *LibvirtDomainManager) getGuestTimeContext() context.Context {
+ 	l.setGuestTimeLock.Lock()
+ 	defer l.setGuestTimeLock.Unlock()
+@@ -1943,3 +2059,12 @@ func getDomainCreateFlags(vmi *v1.VirtualMachineInstance) libvirt.DomainCreateFl
+ 	}
+ 	return flags
+ }
++
++func getIfaceByName(vmi *v1.VirtualMachineInstance, name string) *v1.Interface {
++	for i, iface := range vmi.Spec.Domain.Devices.Interfaces {
++		if iface.Name == name {
++			return &vmi.Spec.Domain.Devices.Interfaces[i]
++		}
++	}
++	return nil
++}
+diff --git a/pkg/virt-launcher/virtwrap/manager_test.go b/pkg/virt-launcher/virtwrap/manager_test.go
+index b0ac28d51a1..16a5246405f 100644
+--- a/pkg/virt-launcher/virtwrap/manager_test.go
++++ b/pkg/virt-launcher/virtwrap/manager_test.go
+@@ -29,6 +29,7 @@ import (
+ 	"path/filepath"
+ 	"runtime"
+ 	"strings"
++	"sync"
+ 	"time"
+ 
+ 	"k8s.io/apimachinery/pkg/types"
+@@ -51,6 +52,8 @@ import (
+ 	ephemeraldiskutils "kubevirt.io/kubevirt/pkg/ephemeral-disk-utils"
+ 	"kubevirt.io/kubevirt/pkg/ephemeral-disk/fake"
+ 	cmdv1 "kubevirt.io/kubevirt/pkg/handler-launcher-com/cmd/v1"
++	"kubevirt.io/kubevirt/pkg/network/cache"
++	kfs "kubevirt.io/kubevirt/pkg/os/fs"
+ 	"kubevirt.io/kubevirt/pkg/util/net/ip"
+ 	cmdclient "kubevirt.io/kubevirt/pkg/virt-handler/cmd-client"
+ 	agentpoller "kubevirt.io/kubevirt/pkg/virt-launcher/virtwrap/agent-poller"
+@@ -124,6 +127,17 @@ var _ = Describe("Manager", func() {
+ 		}
+ 		Expect(converter.Convert_v1_VirtualMachineInstance_To_api_Domain(vmi, domain, c)).To(Succeed())
+ 		api.NewDefaulter(runtime.GOARCH).SetObjectDefaults_Domain(domain)
++		for _, iface := range vmi.Spec.Domain.Devices.Interfaces {
++			if iface.MacAddress == "" {
++				continue
++			}
++			for i, xmlIface := range domain.Spec.Devices.Interfaces {
++				if xmlIface.Alias.GetName() == iface.Name {
++					domain.Spec.Devices.Interfaces[i].MAC = &api.MAC{MAC: iface.MacAddress}
++					break
++				}
++			}
++		}
+ 
+ 		return &domain.Spec
+ 	}
+@@ -2163,6 +2177,207 @@ var _ = Describe("Manager", func() {
+ 		Expect(err).To(MatchError(ContainSubstring("failed to find the status of volume test1")))
+ 	})
+ 
++	It("executes reconnectGuestNics with bridge and same MAC address", func() {
++		// Make sure that we always free the domain after use
++		mockDomain.EXPECT().Free()
++
++		manager, _ := NewLibvirtDomainManager(mockConn, testVirtShareDir, testEphemeralDiskDir, nil, "/usr/share/OVMF", ephemeralDiskCreatorMock)
++
++		// we need the non-typecast object to make the function we want to test available
++		libvirtmanager := manager.(*LibvirtDomainManager)
++
++		vmi := newVMI(testNamespace, testVmName)
++
++		// define bridged pod network with cached MAC address, which is actual
++		iface := api.Interface{
++			MAC:   &api.MAC{MAC: "de:ad:00:00:be:af"},
++			Alias: api.NewUserDefinedAlias("default"),
++			Target: &api.InterfaceTarget{
++				Managed: "no",
++				Device:  "tap0",
++			},
++		}
++
++		cacheCreator := new(tempCacheCreator)
++		Expect(cache.WriteDomainInterfaceCache(cacheCreator, "1", iface.Alias.GetName(), &iface)).To(Succeed())
++		vmi.Spec.Domain.Devices.Interfaces = append(
++			vmi.Spec.Domain.Devices.Interfaces,
++			v1.Interface{
++				Name: "default",
++				InterfaceBindingMethod: v1.InterfaceBindingMethod{
++					Bridge: &v1.InterfaceBridge{},
++				},
++				MacAddress: "de:ad:00:00:be:af",
++			},
++		)
++		vmi.Spec.Networks = append(
++			vmi.Spec.Networks,
++			v1.Network{Name: "default",
++				NetworkSource: v1.NetworkSource{
++					Pod: &v1.PodNetwork{},
++				}},
++		)
++
++		domainSpec := expectedDomainFor(vmi)
++		xmlDomain, err := xml.MarshalIndent(domainSpec, "", "\t")
++		Expect(err).ToNot(HaveOccurred())
++		mockConn.EXPECT().LookupDomainByName(testDomainName).Return(mockDomain, nil)
++		mockDomain.EXPECT().GetXMLDesc(libvirt.DomainXMLFlags(0)).MaxTimes(1).Return(string(xmlDomain), nil)
++		mockDomain.EXPECT().UpdateDeviceFlags(`<interface type="ethernet"><source></source><model type="virtio-non-transitional"></model><mac address="de:ad:00:00:be:af"></mac><alias name="ua-default"></alias><rom enabled="no"></rom></interface>`, libvirt.DomainDeviceModifyFlags(3)).Return(nil)
++		mockDomain.EXPECT().UpdateDeviceFlags(`<interface type="ethernet"><source></source><model type="virtio-non-transitional"></model><mac address="de:ad:00:00:be:af"></mac><link state="down"></link><alias name="ua-default"></alias><rom enabled="no"></rom></interface>`, libvirt.DomainDeviceModifyFlags(3)).Return(nil)
++		Expect(libvirtmanager.reconnectGuestNics(vmi, cacheCreator)).To(Succeed())
++	})
++
++	It("executes reconnectGuestNics with bridge and updated MAC address", func() {
++
++		// Make sure that we always free the domain after use
++		mockDomain.EXPECT().Free()
++
++		manager, _ := NewLibvirtDomainManager(mockConn, testVirtShareDir, testEphemeralDiskDir, nil, "/usr/share/OVMF", ephemeralDiskCreatorMock)
++
++		// we need the non-typecast object to make the function we want to test available
++		libvirtmanager := manager.(*LibvirtDomainManager)
++
++		vmi := newVMI(testNamespace, testVmName)
++
++		// define bridged pod network with cached MAC address, which is updated
++		iface := api.Interface{
++			MAC:   &api.MAC{MAC: "de:ad:00:00:be:ab"},
++			Alias: api.NewUserDefinedAlias("default"),
++			Target: &api.InterfaceTarget{
++				Managed: "no",
++				Device:  "tap0",
++			},
++		}
++		cacheCreator := new(tempCacheCreator)
++		Expect(cache.WriteDomainInterfaceCache(cacheCreator, "1", iface.Alias.GetName(), &iface)).To(Succeed())
++		vmi.Spec.Domain.Devices.Interfaces = append(
++			vmi.Spec.Domain.Devices.Interfaces,
++			v1.Interface{
++				Name: "default",
++				InterfaceBindingMethod: v1.InterfaceBindingMethod{
++					Bridge: &v1.InterfaceBridge{},
++				},
++				MacAddress: "de:ad:00:00:be:af",
++			},
++		)
++		vmi.Spec.Networks = append(
++			vmi.Spec.Networks,
++			v1.Network{Name: "default",
++				NetworkSource: v1.NetworkSource{
++					Pod: &v1.PodNetwork{},
++				}},
++		)
++
++		domainSpec := expectedDomainFor(vmi)
++		xmlDomain, err := xml.MarshalIndent(domainSpec, "", "\t")
++		Expect(err).ToNot(HaveOccurred())
++		mockConn.EXPECT().LookupDomainByName(testDomainName).Return(mockDomain, nil)
++		mockDomain.EXPECT().GetXMLDesc(libvirt.DomainXMLFlags(0)).MaxTimes(1).Return(string(xmlDomain), nil)
++		mockDomain.EXPECT().AttachDevice(`<interface type="ethernet"><source></source><model type="virtio-non-transitional"></model><mac address="de:ad:00:00:be:ab"></mac><alias name="ua-default"></alias><rom enabled="no"></rom></interface>`).Return(nil)
++		mockDomain.EXPECT().DetachDevice(`<interface type="ethernet"><source></source><model type="virtio-non-transitional"></model><mac address="de:ad:00:00:be:af"></mac><alias name="ua-default"></alias><rom enabled="no"></rom></interface>`).Return(nil)
++		Expect(libvirtmanager.reconnectGuestNics(vmi, cacheCreator)).To(Succeed())
++	})
++
++	It("executes reconnectGuestNics with masquerade and bridged multus networks", func() {
++		// Make sure that we always free the domain after use
++		mockDomain.EXPECT().Free()
++
++		manager, _ := NewLibvirtDomainManager(mockConn, testVirtShareDir, testEphemeralDiskDir, nil, "/usr/share/OVMF", ephemeralDiskCreatorMock)
++
++		// we need the non-typecast object to make the function we want to test available
++		libvirtmanager := manager.(*LibvirtDomainManager)
++
++		vmi := newVMI(testNamespace, testVmName)
++
++		// define macvtap pod network
++		vmi.Spec.Domain.Devices.Interfaces = append(
++			vmi.Spec.Domain.Devices.Interfaces,
++			v1.Interface{
++				Name: "default",
++				InterfaceBindingMethod: v1.InterfaceBindingMethod{
++					Masquerade: &v1.InterfaceMasquerade{},
++				},
++				MacAddress: "de:ad:00:00:be:af",
++			},
++		)
++		vmi.Spec.Networks = append(
++			vmi.Spec.Networks,
++			v1.Network{Name: "default",
++				NetworkSource: v1.NetworkSource{
++					Pod: &v1.PodNetwork{},
++				}},
++		)
++
++		// define bridged multus network with cached MAC address, which is actual
++		iface := api.Interface{
++			MAC:   &api.MAC{MAC: "de:ad:00:00:aa:ff"},
++			Alias: api.NewUserDefinedAlias("test1"),
++			Target: &api.InterfaceTarget{
++				Managed: "no",
++				Device:  "tap1",
++			},
++		}
++		cacheCreator := new(tempCacheCreator)
++		Expect(cache.WriteDomainInterfaceCache(cacheCreator, "1", iface.Alias.GetName(), &iface)).To(Succeed())
++		vmi.Spec.Domain.Devices.Interfaces = append(
++			vmi.Spec.Domain.Devices.Interfaces,
++			v1.Interface{
++				Name: "test1",
++				InterfaceBindingMethod: v1.InterfaceBindingMethod{
++					Bridge: &v1.InterfaceBridge{},
++				},
++				MacAddress: "de:ad:00:00:aa:ff",
++			},
++		)
++		vmi.Spec.Networks = append(
++			vmi.Spec.Networks,
++			v1.Network{Name: "test1",
++				NetworkSource: v1.NetworkSource{
++					Multus: &v1.MultusNetwork{NetworkName: "test1"},
++				}},
++		)
++
++		// define bridged multus network with cached MAC address, which is updated
++		iface = api.Interface{
++			MAC:   &api.MAC{MAC: "de:ad:00:00:cc:dd"},
++			Alias: api.NewUserDefinedAlias("test2"),
++			Target: &api.InterfaceTarget{
++				Managed: "no",
++				Device:  "tap2",
++			},
++		}
++		Expect(cache.WriteDomainInterfaceCache(cacheCreator, "1", iface.Alias.GetName(), &iface)).To(Succeed())
++		vmi.Spec.Domain.Devices.Interfaces = append(
++			vmi.Spec.Domain.Devices.Interfaces,
++			v1.Interface{
++				Name: "test2",
++				InterfaceBindingMethod: v1.InterfaceBindingMethod{
++					Bridge: &v1.InterfaceBridge{},
++				},
++				MacAddress: "de:ad:00:00:cc:aa",
++			},
++		)
++		vmi.Spec.Networks = append(
++			vmi.Spec.Networks,
++			v1.Network{Name: "test2",
++				NetworkSource: v1.NetworkSource{
++					Multus: &v1.MultusNetwork{NetworkName: "test2"},
++				}},
++		)
++
++		domainSpec := expectedDomainFor(vmi)
++		xmlDomain, err := xml.MarshalIndent(domainSpec, "", "\t")
++		Expect(err).ToNot(HaveOccurred())
++		mockConn.EXPECT().LookupDomainByName(testDomainName).Return(mockDomain, nil)
++		mockDomain.EXPECT().GetXMLDesc(libvirt.DomainXMLFlags(0)).MaxTimes(1).Return(string(xmlDomain), nil)
++		mockDomain.EXPECT().AttachDevice(`<interface type="ethernet"><source></source><model type="virtio-non-transitional"></model><mac address="de:ad:00:00:cc:dd"></mac><alias name="ua-test2"></alias><rom enabled="no"></rom></interface>`).Return(nil)
++		mockDomain.EXPECT().DetachDevice(`<interface type="ethernet"><source></source><model type="virtio-non-transitional"></model><mac address="de:ad:00:00:cc:aa"></mac><alias name="ua-test2"></alias><rom enabled="no"></rom></interface>`).Return(nil)
++		mockDomain.EXPECT().UpdateDeviceFlags(`<interface type="ethernet"><source></source><model type="virtio-non-transitional"></model><mac address="de:ad:00:00:aa:ff"></mac><alias name="ua-test1"></alias><rom enabled="no"></rom></interface>`, libvirt.DomainDeviceModifyFlags(3)).Return(nil)
++		mockDomain.EXPECT().UpdateDeviceFlags(`<interface type="ethernet"><source></source><model type="virtio-non-transitional"></model><mac address="de:ad:00:00:aa:ff"></mac><link state="down"></link><alias name="ua-test1"></alias><rom enabled="no"></rom></interface>`, libvirt.DomainDeviceModifyFlags(3)).Return(nil)
++		Expect(libvirtmanager.reconnectGuestNics(vmi, cacheCreator)).To(Succeed())
++	})
++
+ 	// TODO: test error reporting on non successful VirtualMachineInstance syncs and kill attempts
+ })
+ 
+@@ -2551,6 +2766,10 @@ var _ = Describe("Manager helper functions", func() {
+ 
+ 	})
+ 
++	Context("possibleGuestSize", func() {
++
++	})
++
+ })
+ 
+ func newVMI(namespace, name string) *v1.VirtualMachineInstance {
+@@ -2597,3 +2816,19 @@ func domainToMetadataXml(domain *api.DomainSpec) string {
+ 	Expect(err).ToNot(HaveOccurred())
+ 	return string(xml)
+ }
++
++type tempCacheCreator struct {
++	once   sync.Once
++	tmpDir string
++}
++
++func (c *tempCacheCreator) New(filePath string) *cache.Cache {
++	c.once.Do(func() {
++		tmpDir, err := ioutil.TempDir("", "temp-cache")
++		if err != nil {
++			panic("Unable to create temp cache directory")
++		}
++		c.tmpDir = tmpDir
++	})
++	return cache.NewCustomCache(filePath, kfs.NewWithRootPath(c.tmpDir))
++}
+diff --git a/tests/migration_test.go b/tests/migration_test.go
+index 3864c9013eb..5ed154dcbc8 100644
+--- a/tests/migration_test.go
++++ b/tests/migration_test.go
+@@ -60,11 +60,13 @@ import (
+ 	policyv1beta1 "k8s.io/api/policy/v1beta1"
+ 	"k8s.io/apimachinery/pkg/api/errors"
+ 	"k8s.io/apimachinery/pkg/api/resource"
++	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+ 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+ 	"k8s.io/apimachinery/pkg/labels"
+ 	"k8s.io/apimachinery/pkg/types"
+ 	"k8s.io/apimachinery/pkg/util/intstr"
+ 	"k8s.io/apimachinery/pkg/util/rand"
++	"k8s.io/apimachinery/pkg/util/wait"
+ 	"k8s.io/utils/pointer"
+ 
+ 	"kubevirt.io/kubevirt/tests/libvmi"
+@@ -674,7 +676,7 @@ var _ = Describe("[rfe_id:393][crit:high][vendor:cnv-qe@redhat.com][level:system
+ 			tests.WaitForVirtualMachineToDisappearWithTimeout(vmi, 120)
+ 		}
+ 
+-		Context("with a bridge network interface", func() {
++		Context("with a bridge network interface when feature-gate NetworkAwareLiveMigration is off", func() {
+ 			It("[test_id:3226]should reject a migration of a vmi with a bridge interface", func() {
+ 				vmi := tests.NewRandomVMIWithEphemeralDisk(cd.ContainerDiskFor(cd.ContainerDiskAlpine))
+ 				vmi.Spec.Domain.Devices.Interfaces = []v1.Interface{
+@@ -718,6 +720,103 @@ var _ = Describe("[rfe_id:393][crit:high][vendor:cnv-qe@redhat.com][level:system
+ 				tests.WaitForVirtualMachineToDisappearWithTimeout(vmi, 120)
+ 			})
+ 		})
++
++		Context("[Serial] with a bridge network interface when feature-gate NetworkAwareLiveMigration is on", func() {
++			BeforeEach(func() {
++				tests.EnableFeatureGate(virtconfig.NetworkAwareLiveMigrationGate)
++			})
++			AfterEach(func() {
++				tests.DisableFeatureGate(virtconfig.NetworkAwareLiveMigrationGate)
++			})
++
++			var clientVMI *v1.VirtualMachineInstance
++			var serverVMI *v1.VirtualMachineInstance
++			var clientVMIPodName string
++			var serverIP string
++			defaultNetworkName := "default"
++			ifaceIPReportTimeout := 4 * time.Minute
++
++			waitVMIfaceIPReport := func(vmi *v1.VirtualMachineInstance, ifaceName string, timeout time.Duration) (string, error) {
++				var vmiIP string
++				err := wait.PollImmediate(time.Second, timeout, func() (done bool, err error) {
++					vmi, err := virtClient.VirtualMachineInstance(vmi.Namespace).Get(vmi.Name, &k8smetav1.GetOptions{})
++					if err != nil {
++						return false, err
++					}
++
++					for _, iface := range vmi.Status.Interfaces {
++						if iface.Name == ifaceName {
++							if ip := iface.IP; ip != "" {
++								vmiIP = ip
++								return true, nil
++							}
++							return false, nil
++						}
++					}
++
++					return false, nil
++				})
++				if err != nil {
++					return "", err
++				}
++
++				return vmiIP, nil
++			}
++
++			waitForPodCompleted := func(podNamespace string, podName string) error {
++				pod, err := virtClient.CoreV1().Pods(podNamespace).Get(context.TODO(), podName, k8smetav1.GetOptions{})
++				if err != nil {
++					return err
++				}
++				if pod.Status.Phase == k8sv1.PodSucceeded || pod.Status.Phase == k8sv1.PodFailed {
++					return nil
++				}
++				return fmt.Errorf("pod hasn't completed, current Phase: %s", pod.Status.Phase)
++			}
++
++			BeforeEach(func() {
++				clientVMI = tests.NewRandomVMIWithEphemeralDisk(cd.ContainerDiskFor(cd.ContainerDiskFedoraTestTooling))
++				clientVMI.Spec.Domain.Resources.Requests[k8sv1.ResourceMemory] = resource.MustParse(fedoraVMSize)
++				clientVMI.Spec.Domain.Devices.Interfaces = []v1.Interface{
++					{
++						Name: defaultNetworkName,
++						InterfaceBindingMethod: v1.InterfaceBindingMethod{
++							Bridge: &v1.InterfaceBridge{},
++						},
++					},
++				}
++				clientVMI = runVMIAndExpectLaunch(clientVMI, 240)
++				clientVMIPodName = tests.GetVmPodName(virtClient, clientVMI)
++
++				Expect(console.LoginToFedora(clientVMI)).To(Succeed(), "Should be able to login to the Fedora VM")
++			})
++
++			BeforeEach(func() {
++				serverVMI = tests.NewRandomVMIWithEphemeralDisk(cd.ContainerDiskFor(cd.ContainerDiskFedoraTestTooling))
++				serverVMI.Spec.Domain.Resources.Requests[k8sv1.ResourceMemory] = resource.MustParse(fedoraVMSize)
++				serverVMI = runVMIAndExpectLaunch(serverVMI, 240)
++				serverIP, err = waitVMIfaceIPReport(serverVMI, defaultNetworkName, ifaceIPReportTimeout)
++				Expect(err).NotTo(HaveOccurred(), "should have managed to figure out the IP of the server VMI")
++				Expect(console.LoginToFedora(serverVMI)).To(Succeed(), "Should be able to login to the Fedora VM")
++
++				// TODO test also the IPv6 address (issue- https://github.com/kubevirt/kubevirt/issues/7506)
++				libnet.SkipWhenClusterNotSupportIpv4(virtClient)
++				Expect(libnet.PingFromVMConsole(clientVMI, serverIP)).To(Succeed(), "connectivity is expected *before* migrating the VMI")
++			})
++
++			It("[test_id:2656]should keep connectivity after a migration", func() {
++				migration := tests.NewRandomMigration(clientVMI.Name, clientVMI.GetNamespace())
++				_ = tests.RunMigrationAndExpectCompletion(virtClient, migration, tests.MigrationWaitTime)
++				// In case of clientVMI and serverVMI running on the same node before migration, the serverVMI
++				// will be reachable only when the original launcher pod terminates.
++				Eventually(func() error {
++					return waitForPodCompleted(clientVMI.Namespace, clientVMIPodName)
++				}, tests.ContainerCompletionWaitTime, time.Second).Should(Succeed(), fmt.Sprintf("all containers should complete in source virt-launcher pod: %s", clientVMIPodName))
++
++				Expect(libnet.PingFromVMConsole(clientVMI, serverIP)).To(Succeed(), "connectivity is expected *after* migrating the VMI")
++			})
++		})
++
+ 		Context("[Serial] with bandwidth limitations", func() {
+ 
+ 			var repeatedlyMigrateWithBandwidthLimitation = func(vmi *v1.VirtualMachineInstance, bandwidth string, repeat int) time.Duration {
