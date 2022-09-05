@@ -15,5 +15,4 @@ const (
 	authSecretName  = "kiali-basic-auth"
 )
 
-var hook = generate_password.NewBasicAuthPlainHook(moduleValuesKey, authSecretNS, authSecretName)
-var _ = generate_password.RegisterHook(hook)
+var _ = generate_password.RegisterHook(moduleValuesKey, authSecretNS, authSecretName)

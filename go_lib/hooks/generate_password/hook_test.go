@@ -18,20 +18,38 @@ package generate_password
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func Test_extractPassword(t *testing.T) {
+func TestExtractPassword(t *testing.T) {
+	const (
+		expectNoError = false
+		expectError   = true
+	)
 	tests := []struct {
-		name   string
-		in     string
-		expect string
-		err    bool
+		name       string
+		in         string
+		expectPass string
+		expectErr  bool
 	}{
 		{
 			"password",
 			"admin:{PLAIN}pass",
 			"pass",
-			false,
+			expectNoError,
+		},
+		{
+			"no PLAIN marker",
+			"admin:pass",
+			"",
+			expectError,
+		},
+		{
+			"empty",
+			"",
+			"",
+			expectError,
 		},
 	}
 
@@ -39,11 +57,10 @@ func Test_extractPassword(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewBasicAuthPlainHook("testMod", "default", "auth")
 			pass, err := h.extractPasswordFromBasicAuth(tt.in)
-			if tt.err && err == nil {
-				t.Fatalf("expect error for input '%s'", tt.in)
-			}
-			if !tt.err && pass != tt.expect {
-				t.Fatalf("expect password in '%s', got '%s'", tt.expect, pass)
+			if tt.expectErr == expectError {
+				require.NotNil(t, err, "input '%s' should not success", tt.in)
+			} else {
+				require.Equal(t, tt.expectPass, pass, "should extract password from '%s'", tt.in)
 			}
 		})
 	}

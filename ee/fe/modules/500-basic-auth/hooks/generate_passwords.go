@@ -18,15 +18,16 @@ import (
 	"github.com/deckhouse/deckhouse/go_lib/pwgen"
 )
 
-// Set locations from config values or a default one with generated password.
+// Set locations from config values or set a default one with generated password.
 
-// Subscribe to Secret/htpasswd from templates.
-const secretNS = "kube-basic-auth"
-const secretName = "htpasswd"
-const secretBinding = "htpasswd_secret"
-const locationsKey = "basicAuth.locations"
-const locationsInternalKey = "basicAuth.internal.locations"
-const generatedPasswdLength = 20
+const (
+	secretNS              = "kube-basic-auth"
+	secretName            = "htpasswd"
+	secretBinding         = "htpasswd_secret"
+	locationsKey          = "basicAuth.locations"
+	locationsInternalKey  = "basicAuth.internal.locations"
+	generatedPasswdLength = 20
+)
 
 var _ = sdk.RegisterFunc(&go_hook.HookConfig{
 	Kubernetes: []go_hook.KubernetesConfig{

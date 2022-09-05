@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
+	addonutils "github.com/flant/addon-operator/pkg/utils"
 	"github.com/flant/addon-operator/sdk"
 	"github.com/flant/shell-operator/pkg/kube_events_manager/types"
 	v1 "k8s.io/api/core/v1"
@@ -36,24 +37,23 @@ const (
 )
 
 func NewBasicAuthPlainHook(moduleValuesPath string, ns string, secretName string) *Hook {
+	// Ensure camelCase for moduleValuesPath
+	valuesKey := addonutils.ModuleNameToValuesKey(moduleValuesPath)
 	return &Hook{
 		Secret: Secret{
-			Namespace:           ns,
-			Name:                secretName,
-			BasicAuthPlainField: defaultBasicAuthPlainField,
+			Namespace: ns,
+			Name:      secretName,
 		},
-		Values: Values{
-			ModuleKey: moduleValuesPath,
-		},
-		BeforeHelmOrder: defaultBeforeHelmOrder,
+		ValuesKey: valuesKey,
 	}
 }
 
 // RegisterHook returns func to register common hook that generates
 // and stores a password in the Secret.
-func RegisterHook(hook *Hook) bool {
+func RegisterHook(moduleValuesPath string, ns string, secretName string) bool {
+	hook := NewBasicAuthPlainHook(moduleValuesPath, ns, secretName)
 	return sdk.RegisterFunc(&go_hook.HookConfig{
-		Queue: fmt.Sprintf("/modules/%s/generate_password", hook.Values.ModuleKey),
+		Queue: fmt.Sprintf("/modules/%s/generate_password", hook.ValuesKey),
 		Kubernetes: []go_hook.KubernetesConfig{
 			{
 				Name:       secretBindingName,
@@ -73,33 +73,18 @@ func RegisterHook(hook *Hook) bool {
 				FilterFunc:                   hook.Filter,
 			},
 		},
-		OnBeforeHelm: &go_hook.OrderedConfig{Order: float64(hook.BeforeHelmOrder)},
+		OnBeforeHelm: &go_hook.OrderedConfig{Order: float64(defaultBeforeHelmOrder)},
 	}, hook.Handle)
 }
 
 type Hook struct {
-	Secret          Secret
-	Values          Values
-	BeforeHelmOrder int
-
-	PasswordGeneratorFunc func(input *go_hook.HookInput) string
+	Secret    Secret
+	ValuesKey string
 }
 
 type Secret struct {
 	Namespace string
 	Name      string
-
-	RawPasswordField    string
-	BasicAuthPlainField string
-
-	FilterFunc func(secret *v1.Secret) (go_hook.FilterResult, error)
-}
-
-type Values struct {
-	ModuleKey           string
-	PasswordKey         string
-	PasswordInternalKey string
-	ExternalAuthKey     string
 }
 
 // Filter extracts password from the Secret. Password can be stored as a raw string or as
@@ -112,16 +97,8 @@ func (h *Hook) Filter(obj *unstructured.Unstructured) (go_hook.FilterResult, err
 		return nil, fmt.Errorf("cannot convert secret to struct: %v", err)
 	}
 
-	if h.Secret.FilterFunc != nil {
-		return h.Secret.FilterFunc(secret)
-	}
-
-	if h.Secret.RawPasswordField != "" {
-		return string(secret.Data[h.Secret.RawPasswordField]), nil
-	}
-
 	// Return field with basic auth.
-	return string(secret.Data[h.SecretField()]), nil
+	return string(secret.Data[defaultBasicAuthPlainField]), nil
 }
 
 // Handle restores password from the configuration or from the Secret and
@@ -129,9 +106,9 @@ func (h *Hook) Filter(obj *unstructured.Unstructured) (go_hook.FilterResult, err
 // It generates new password if no password found in the configuration and the
 // Secret or no externalAuthentication defined.
 func (h *Hook) Handle(input *go_hook.HookInput) error {
-	var externalAuthKey = h.ExternalAuthKey()
-	var passwordKey = h.PasswordKey()
-	var passwordInternalKey = h.PasswordInternalKey()
+	externalAuthKey := h.ExternalAuthKey()
+	passwordKey := h.PasswordKey()
+	passwordInternalKey := h.PasswordInternalKey()
 
 	// Clear password from internal values if an external authentication is enabled.
 	if input.Values.Exists(externalAuthKey) {
@@ -146,23 +123,23 @@ func (h *Hook) Handle(input *go_hook.HookInput) error {
 		return nil
 	}
 
-	// Try to set password from the Secret.
+	// Try to restore password from the Secret.
 	snap := input.Snapshots[secretBindingName]
 	if len(snap) > 0 {
-		storedPassword := snap[0].(string)
+		secretField, ok := snap[0].(string)
+		if !ok {
+			return fmt.Errorf("problem getting field '%s' from Secret/%s: got %T, while string is expected", defaultBasicAuthPlainField, h.Secret.Name, snap[0])
+		}
+		storedPassword, err := h.extractPasswordFromBasicAuth(secretField)
+		if err != nil {
+			return err
+		}
 		input.Values.Set(passwordInternalKey, storedPassword)
 		return nil
 	}
 
 	// No config value, no Secret, generate new password.
-	newPassword := ""
-	if h.PasswordGeneratorFunc != nil {
-		newPassword = h.PasswordGeneratorFunc(input)
-	} else {
-		newPassword = DefaultGenerator()
-	}
-
-	input.Values.Set(passwordInternalKey, newPassword)
+	input.Values.Set(passwordInternalKey, GeneratePassword())
 	return nil
 }
 
@@ -173,35 +150,15 @@ const (
 )
 
 func (h *Hook) ExternalAuthKey() string {
-	key := h.Values.ExternalAuthKey
-	if key != "" {
-		return key
-	}
-	return fmt.Sprintf(externalAuthKeyTmpl, h.Values.ModuleKey)
+	return fmt.Sprintf(externalAuthKeyTmpl, h.ValuesKey)
 }
 
 func (h *Hook) PasswordKey() string {
-	key := h.Values.PasswordKey
-	if key != "" {
-		return key
-	}
-	return fmt.Sprintf(passwordKeyTmpl, h.Values.ModuleKey)
+	return fmt.Sprintf(passwordKeyTmpl, h.ValuesKey)
 }
 
 func (h *Hook) PasswordInternalKey() string {
-	key := h.Values.PasswordInternalKey
-	if key != "" {
-		return key
-	}
-	return fmt.Sprintf(passwordInternalKeyTmpl, h.Values.ModuleKey)
-}
-
-func (h *Hook) SecretField() string {
-	field := h.Secret.BasicAuthPlainField
-	if field == "" {
-		field = defaultBasicAuthPlainField
-	}
-	return field
+	return fmt.Sprintf(passwordInternalKeyTmpl, h.ValuesKey)
 }
 
 // extractPasswordFromBasicAuth extracts password from the plain basic auth string:
@@ -209,12 +166,12 @@ func (h *Hook) SecretField() string {
 func (h *Hook) extractPasswordFromBasicAuth(basicAuth string) (string, error) {
 	parts := strings.SplitN(basicAuth, "{PLAIN}", 2)
 	if len(parts) != 2 {
-		return "", fmt.Errorf("field '%s' in Secret/%s is not a basic auth plain password", h.SecretField(), h.Secret.Name)
+		return "", fmt.Errorf("field '%s' in Secret/%s is not a basic auth plain password", defaultBasicAuthPlainField, h.Secret.Name)
 	}
 
 	return strings.TrimSpace(parts[1]), nil
 }
 
-func DefaultGenerator() string {
+func GeneratePassword() string {
 	return pwgen.AlphaNum(20)
 }

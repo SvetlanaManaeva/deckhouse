@@ -51,7 +51,7 @@ properties:
       - type: boolean
         enum: [false]
     description: |
-      Key to access Madison alertmanager, or `false` to disable integration.
+      Key to access Madison alertmanager, or `false` to disable integration. Leave empty to autogenerate upon registration (stored in Secret/madison-proxy).
     x-examples: ["abc"]
   licenseKey:
     type: string

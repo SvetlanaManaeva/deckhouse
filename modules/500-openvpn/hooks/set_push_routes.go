@@ -38,7 +38,7 @@ const (
 // from module config values and global discovery.
 // Routes in list are unique.
 func setPushToClientRoutes(input *go_hook.HookInput) error {
-	var routes = set.New()
+	routes := set.New()
 
 	userDefinedSubnets, ok := input.ConfigValues.GetOk(clientRoutesValuesPath)
 	if ok {
