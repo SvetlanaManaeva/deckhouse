@@ -33,10 +33,11 @@ const (
 	ChartConfigFilename  = "Chart.yaml"
 	ValuesConfigFilename = "values_matrix_test.yaml"
 
-	crdsDir    = "crds"
-	openapiDir = "openapi"
-	hooksDir   = "hooks"
-	imagesDir  = "images"
+	crdsDir            = "crds"
+	openapiDir         = "openapi"
+	hooksDir           = "hooks"
+	imagesDir          = "images"
+	prometheusRulesDir = "monitoring/prometheus-rules"
 )
 
 var toHelmignore = []string{hooksDir, openapiDir, crdsDir, imagesDir, "enabled"}
@@ -256,6 +257,10 @@ func lintModuleStructure(lintRuleErrorsList *errors.LintRuleErrorsList, modulePa
 
 	if isExistsOnFilesystem(modulePath, crdsDir) {
 		lintRuleErrorsList.Merge(crdsModuleRule(moduleName, filepath.Join(modulePath, crdsDir)))
+	}
+
+	if isExistsOnFilesystem(modulePath, prometheusRulesDir) {
+		lintRuleErrorsList.Merge(prometheusModuleRule(moduleName, filepath.Join(modulePath, prometheusRulesDir)))
 	}
 
 	lintRuleErrorsList.Merge(ossModuleRule(moduleName, modulePath))
