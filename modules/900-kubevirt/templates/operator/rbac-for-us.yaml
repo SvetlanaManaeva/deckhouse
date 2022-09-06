@@ -22,18 +22,18 @@ rules:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
   name: kubevirt-operator
   namespace: d8-kubevirt
-  {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
 imagePullSecrets:
 - name: deckhouse-registry
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
+  {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
   name: kubevirt-operator
   namespace: d8-kubevirt
-  {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
 rules:
 - apiGroups:
   - ""
@@ -78,9 +78,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
+  {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
   name: kubevirt-operator-rolebinding
   namespace: d8-kubevirt
-  {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -93,8 +93,8 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: kubevirt-operator
   {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
+  name: kubevirt-operator
 rules:
 - apiGroups:
   - kubevirt.io
@@ -259,20 +259,6 @@ rules:
   - update
   - patch
 - apiGroups:
-  - subresources.kubevirt.io
-  resources:
-  - virtualmachineinstances/pause
-  - virtualmachineinstances/unpause
-  - virtualmachineinstances/addvolume
-  - virtualmachineinstances/removevolume
-  - virtualmachineinstances/freeze
-  - virtualmachineinstances/unfreeze
-  - virtualmachineinstances/softreboot
-  - virtualmachineinstances/portforward
-  verbs:
-  - update
-  - get
-- apiGroups:
   - ""
   resources:
   - namespaces
@@ -281,6 +267,22 @@ rules:
   - list
   - watch
   - patch
+- apiGroups:
+  - flavor.kubevirt.io
+  resources:
+  - virtualmachineflavors
+  - virtualmachineclusterflavors
+  - virtualmachinepreferences
+  - virtualmachineclusterpreferences
+  verbs:
+  - get
+  - delete
+  - create
+  - update
+  - patch
+  - list
+  - watch
+  - deletecollection
 - apiGroups:
   - ""
   resources:
@@ -379,10 +381,10 @@ rules:
   - list
   - watch
 - apiGroups:
-  - flavor.kubevirt.io
+  - instancetype.kubevirt.io
   resources:
-  - virtualmachineflavors
-  - virtualmachineclusterflavors
+  - virtualmachineinstancetypes
+  - virtualmachineclusterinstancetypes
   - virtualmachinepreferences
   - virtualmachineclusterpreferences
   verbs:
@@ -605,10 +607,10 @@ rules:
   - list
   - watch
 - apiGroups:
-  - flavor.kubevirt.io
+  - instancetype.kubevirt.io
   resources:
-  - virtualmachineflavors
-  - virtualmachineclusterflavors
+  - virtualmachineinstancetypes
+  - virtualmachineclusterinstancetypes
   - virtualmachinepreferences
   - virtualmachineclusterpreferences
   verbs:
@@ -651,6 +653,30 @@ rules:
   - namespaces
   verbs:
   - get
+- apiGroups:
+  - route.openshift.io
+  resources:
+  - routes
+  verbs:
+  - list
+  - get
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - list
+  - get
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - list
+  - get
+  - watch
 - apiGroups:
   - kubevirt.io
   resources:
@@ -809,10 +835,10 @@ rules:
   - watch
   - deletecollection
 - apiGroups:
-  - flavor.kubevirt.io
+  - instancetype.kubevirt.io
   resources:
-  - virtualmachineflavors
-  - virtualmachineclusterflavors
+  - virtualmachineinstancetypes
+  - virtualmachineclusterinstancetypes
   - virtualmachinepreferences
   - virtualmachineclusterpreferences
   verbs:
@@ -911,10 +937,10 @@ rules:
   - list
   - watch
 - apiGroups:
-  - flavor.kubevirt.io
+  - instancetype.kubevirt.io
   resources:
-  - virtualmachineflavors
-  - virtualmachineclusterflavors
+  - virtualmachineinstancetypes
+  - virtualmachineclusterinstancetypes
   - virtualmachinepreferences
   - virtualmachineclusterpreferences
   verbs:
@@ -983,10 +1009,10 @@ rules:
   - list
   - watch
 - apiGroups:
-  - flavor.kubevirt.io
+  - instancetype.kubevirt.io
   resources:
-  - virtualmachineflavors
-  - virtualmachineclusterflavors
+  - virtualmachineinstancetypes
+  - virtualmachineclusterinstancetypes
   - virtualmachinepreferences
   - virtualmachineclusterpreferences
   verbs:
@@ -1025,8 +1051,8 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: kubevirt-operator
   {{- include "helm_lib_module_labels" (list .) | nindent 2 }}
+  name: kubevirt-operator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -1035,3 +1061,4 @@ subjects:
 - kind: ServiceAccount
   name: kubevirt-operator
   namespace: d8-kubevirt
+
