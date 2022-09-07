@@ -31,14 +31,14 @@ else ifeq ($(OS_NAME), Darwin)
 	YQ_PLATFORM = darwin
 endif
 # Set arch for yq
-ifeq ($(PLATFORM_NAME), x86_64)
+ifneq (,$(filter $(PLATFORM_NAME), x86_64 unknown))
 	YQ_ARCH = amd64
 else ifeq ($(PLATFORM_NAME), arm)
 	YQ_ARCH = arm64
 endif
 
 # Set arch for crane
-ifeq ($(PLATFORM_NAME), x86_64)
+ifneq (,$(filter $(PLATFORM_NAME), x86_64 unknown))
 	CRANE_ARCH = x86_64
 else ifeq ($(PLATFORM_NAME), arm)
 	CRANE_ARCH = arm64
@@ -76,18 +76,22 @@ deps: bin/golangci-lint bin/trivy bin/regcopy bin/jq bin/yq bin/crane ## Install
 ##@ Tests
 
 .PHONY: tests-modules tests-matrix tests-openapi
-tests-modules: ## Run unit tests for modules hooks and templates.
+tests-modules: docker/dev-image ## Run unit tests for modules hooks and templates.
+	docker run --rm -v $(PWD):/deckhouse -v deckhouse-dev-gopath:/root/go deckhouse-dev \
 	go test -timeout=${TESTS_TIMEOUT} -vet=off ./modules/... ./global-hooks/... ./ee/modules/... ./ee/fe/modules/...
 
-tests-matrix: ## Test how helm templates are rendered with different input values generated from values examples.
+tests-matrix: docker/dev-image ## Test how helm templates are rendered with different input values generated from values examples.
   ##~ Options: FOCUS=module-name
+	docker run --rm -v $(PWD):/deckhouse -e FOCUS=${FOCUS} -v deckhouse-dev-gopath:/root/go deckhouse-dev \
 	go test ./testing/matrix/ -v
 
-tests-openapi: ## Run tests against modules openapi values schemas.
+tests-openapi: docker/dev-image ## Run tests against modules openapi values schemas.
+	docker run --rm -v $(PWD):/deckhouse -v deckhouse-dev-gopath:/root/go deckhouse-dev \
 	go test -vet=off ./testing/openapi_cases/
 
 .PHONY: validate
-validate: ## Check common patterns through all modules.
+validate: docker/dev-image ## Check common patterns through all modules.
+	docker run --rm -v $(PWD):/deckhouse -v deckhouse-dev-gopath:/root/go deckhouse-dev \
 	go test -tags=validation -run Validation -timeout=${TESTS_TIMEOUT} ./testing/...
 
 bin/golangci-lint:
@@ -95,10 +99,12 @@ bin/golangci-lint:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINARY=golangci-lint bash -s -- v${GOLANGCI_VERSION}
 
 .PHONY: lint lint-fix
-lint: ## Run linter.
+lint: docker/dev-image ## Run linter.
+	docker run --rm -v $(PWD):/deckhouse -v deckhouse-dev-gopath:/root/go deckhouse-dev \
 	golangci-lint run
 
-lint-fix: ## Fix lint violations.
+lint-fix: docker/dev-image ## Fix lint violations.
+	docker run --rm -v $(PWD):/deckhouse -v deckhouse-dev-gopath:/root/go deckhouse-dev \
 	golangci-lint run --fix
 
 .PHONY: --lint-markdown-header lint-markdown lint-markdown-fix
@@ -126,10 +132,12 @@ lint-markdown-fix: ## Run markdown linter and fix problems automatically.
 ##@ Generate
 
 .PHONY: generate render-workflow
-generate: ## Run all generate-* jobs in bulk.
-	cd tools; go generate
+generate: docker/dev-image ## Run all generate-* jobs in bulk.
+	docker run --rm -v $(PWD):/deckhouse -v deckhouse-dev-gopath:/root/go deckhouse-dev \
+	sh -c "cd tools; go generate"
 
-render-workflow: ## Generate CI workflow instructions.
+render-workflow: docker/dev-image ## Generate CI workflow instructions.
+	docker run --rm -v $(PWD):/deckhouse -v deckhouse-dev-gopath:/root/go deckhouse-dev \
 	./.github/render-workflows.sh
 
 ##@ Security
@@ -184,3 +192,8 @@ bin/crane: ## Install crane deps for update-patchversion script.
 .PHONY: update-k8s-patch-versions
 update-k8s-patch-versions: ## Run update-patchversion script to generate new version_map.yml.
 	cd candi/tools; bash update_kubernetes_patchversions.sh
+
+.PHONY: docker/dev-image
+docker/dev-image:
+	docker image inspect deckhouse-dev > /dev/null || \
+	docker build -t deckhouse-dev .
