@@ -1,0 +1,132 @@
+candi:
+  features:
+    - summary: Add an `additionalRolePolicies` parameter to AWSClusterConfiguration (#1005)
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2256
+    - summary: Added support for Rocky Linux `9.0`.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2232
+    - summary: Add support for the kubernetes 1.24 version
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2210
+    - summary: >-
+        Set `maxAllowed` and `minAllowed` to all VPA objects. Set resources requests for all
+        controllers if VPA is off.   Added `global.modules.resourcesRequests.controlPlane` values.
+        `global.modules.resourcesRequests.EveryNode` and
+        `global.modules.resourcesRequests.masterNode` values are deprecated.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/1918
+      impact: All of the controllers will be restarted.
+  fixes:
+    - summary: bugfix simple-bridge script for multi-homed nodes
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2376
+    - summary: |-
+        Fix helm image template.
+        Fix cloud-provider-gcp csi-node template.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2340
+deckhouse:
+  fixes:
+    - summary: Fix deckhouse update with shutdown pods in dev clusters
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2388
+dhctl:
+  fixes:
+    - summary: Changes font colour for bold blocks from white to normal
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2346
+    - summary: Fail if there is empty host for ssh connection
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2346
+docs:
+  fixes:
+    - summary: Add `api.` domain into a hosts lists in the getting started.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2354
+    - summary: Minor fix of markup in the GCP getting started steps.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2274
+ingress-nginx:
+  features:
+    - summary: Change default ingress nginx controller version to 1.1
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2267
+      impact: >-
+        All ingress nginx controllers with not-specified version (0.33) will restart and upgrade to
+        1.1
+  fixes:
+    - summary: Improve metrics collection script
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2350
+    - summary: Change defaultControllerVersion without deckhouse reboot
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2338
+istio:
+  fixes:
+    - summary: Application Ingress annotations doc fix.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2395
+    - summary: maxUnavailable strategy for istiod Deployment instead of default one 25%.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2202
+linstor:
+  features:
+    - summary: Automate kernel headers installation
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2287
+  fixes:
+    - summary: Bump DRBD version to `9.1.9`.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2359
+    - summary: Change module order.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2323
+log-shipper:
+  features:
+    - summary: Refactor transforms composition, improve efficiency and fix destination transforms.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2050
+  fixes:
+    - summary: Rewrite Elasticsearch dedot rule in VRL to improve performance.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2192
+    - summary: Prevent Vector from stopping logs processing if Kubernetes API server was restarted.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2192
+    - summary: Fix memory leak for internal metrics.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2192
+monitoring-kubernetes:
+  features:
+    - summary: New Capacity Planning dashboard.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2365
+    - summary: Add GRPC request handling time and etcd peer RTT graphs to etcd dashboard
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2360
+      impact: >-
+        Etcd pods' restart, triggering leader elections and affecting Kubernetes API performance
+        until all etcd pods use new configuration.
+    - summary: Add nodes count panel to the Nodes dashboard.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2196
+  fixes:
+    - summary: Change steppedLine to false for CPU panels and add sorting.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2371
+node-manager:
+  features:
+    - summary: Switched early-oom to PSI metrics
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2358
+  fixes:
+    - summary: >-
+        Do not drain single-master and single standalone nodes where Deckhouse works with automatic
+        approve mode for disruption.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2386
+      impact: >-
+        A node in the `master` nodeGroup with a single node and `Automatic` disruption approval mode
+        will not be drained before approval.
+
+        If Deckhouse works not on a master node and this node is single (or one node in Ready
+        status) in the nodeGroup, and for this nodeGroup the `Automatic` disruption approval mode is
+        set, then disruption operations will be approved for this node without draining.
+    - summary: Change cluster autoscaler timeouts to avoid node flapping
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2279
+openvpn:
+  fixes:
+    - summary: Fix typo in template name.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2393
+prometheus:
+  features:
+    - summary: >-
+        Create mTLS secret to scrape metrics from workloads with PeerAuthentication mtls.mode =
+        STRICT.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2332
+  fixes:
+    - summary: Fix `K8SKubeletTooManyPods` alert.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2356
+testing:
+  fixes:
+    - summary: Fix doc validation file filter
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2336
+    - summary: Fixes the flakiness of matrix tests.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2335
+upmeter:
+  fixes:
+    - summary: Bundled CSS into status page for desired look in restricted environments
+      pull_request: https://github.com/deckhouse/deckhouse/pull/2349
+
